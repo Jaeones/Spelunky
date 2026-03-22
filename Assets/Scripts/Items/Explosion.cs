@@ -53,7 +53,9 @@ namespace Spelunky {
 
                 IDamageable damageable = collider.GetComponentInParent<IDamageable>();
                 if (damageable != null) {
-                    damageable.TryTakeDamage(damage);
+                    using (DebugDamageContext.Use($"Explosion:{name}")) {
+                        damageable.TryTakeDamage(damage);
+                    }
                 }
 
                 IImpulseReceiver impulseReceiver = collider.GetComponentInParent<IImpulseReceiver>();

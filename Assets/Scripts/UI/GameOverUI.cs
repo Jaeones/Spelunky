@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -6,6 +7,21 @@ using UnityEngine.UI;
 namespace Spelunky {
 
     public class GameOverUI : MonoBehaviour {
+
+        public enum ResultPreset {
+            Custom,
+            GameOver,
+            RunClear
+        }
+
+        public sealed class ResultViewModel {
+            public ResultPreset Preset;
+            public string Title;
+            public string ValueLabel;
+            public string ValueText;
+            public string PrimaryActionLabel;
+            public UnityAction PrimaryAction;
+        }
 
         private const int DefaultSortingOrder = 100;
         private const float DefaultScaleFactor = 2f;
@@ -28,9 +44,17 @@ namespace Spelunky {
         [SerializeField] private string scoreLabelText = "SCORE";
         [SerializeField] private string restartLabelText = "RESTART";
 
+        [Header("Run Clear Text")]
+        [SerializeField] private string runClearTitleText = "RUN CLEAR";
+        [SerializeField] private string runClearValueLabelText = "GOLD / TIME";
+        [SerializeField] private string runClearRestartLabelText = "RESTART";
+
         private GameObject _panel;
-        private Text _scoreValueText;
-        private Button _restartButton;
+        private Text _titleValueText;
+        private Text _valueLabelText;
+        private Text _valueText;
+        private Button _primaryActionButton;
+        private Text _primaryActionText;
         private bool _isBuilt;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -43,9 +67,76 @@ namespace Spelunky {
         }
 
         public static void ShowGameOver(int score) {
+            ShowGameOver(score, SceneManager.GetActiveScene().name);
+        }
+
+        public static void ShowGameOver(int score, string restartSceneName) {
             Debug.Log($"Showing Game Over UI with score: {score}");
+
+            UIManager manager = UIManager.EnsureInstance();
+            if (manager != null && manager.TryShowGameOver(score, restartSceneName)) {
+                return;
+            }
+
             GameOverUI ui = EnsureInstance();
-            ui.Show(score);
+            ui.ShowGameOverScreen(score, restartSceneName);
+        }
+
+        public static void ShowResult(ResultViewModel result) {
+            if (result == null) {
+                Debug.LogWarning("GameOverUI.ShowResult called without result data.");
+                return;
+            }
+
+            UIManager manager = UIManager.EnsureInstance();
+            if (manager != null && manager.TryShowResult(result)) {
+                return;
+            }
+
+            GameOverUI ui = EnsureInstance();
+            ui.Show(result);
+        }
+
+        public static void ShowRunClear(int gold, float elapsedSeconds, string restartSceneName) {
+            UIManager manager = UIManager.EnsureInstance();
+            if (manager != null && manager.TryShowRunClear(gold, elapsedSeconds, restartSceneName)) {
+                return;
+            }
+
+            GameOverUI ui = EnsureInstance();
+            ui.ShowRunClearScreen(gold, elapsedSeconds, restartSceneName);
+        }
+
+        public static ResultViewModel CreateRunClearResultModel(int gold, float elapsedSeconds, string restartSceneName) {
+            GameOverUI ui = EnsureInstance();
+            if (ui != null) {
+                return ui.CreateConfiguredRunClearResultModel(gold, elapsedSeconds, restartSceneName);
+            }
+
+            return new ResultViewModel {
+                Preset = ResultPreset.RunClear,
+                Title = "RUN CLEAR",
+                ValueLabel = "GOLD / TIME",
+                ValueText = $"{gold}\n{elapsedSeconds:0.0}s",
+                PrimaryActionLabel = "RESTART",
+                PrimaryAction = CreateRestartAction(restartSceneName)
+            };
+        }
+
+        public static ResultViewModel CreateGameOverResultModel(int score, string restartSceneName) {
+            GameOverUI ui = EnsureInstance();
+            if (ui != null) {
+                return ui.CreateConfiguredGameOverResultModel(score, restartSceneName);
+            }
+
+            return new ResultViewModel {
+                Preset = ResultPreset.GameOver,
+                Title = "GAME OVER",
+                ValueLabel = "SCORE",
+                ValueText = score.ToString(),
+                PrimaryActionLabel = "RESTART",
+                PrimaryAction = CreateRestartAction(restartSceneName)
+            };
         }
 
         private static GameOverUI EnsureInstance() {
@@ -128,27 +219,25 @@ namespace Spelunky {
 
             Font fontToUse = defaultFont != null ? defaultFont : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
 
-            Text title = CreateText("Title", _panel.transform, fontToUse, titleText, 20, FontStyle.Bold);
-            RectTransform titleRect = title.GetComponent<RectTransform>();
+            _titleValueText = CreateText("Title", _panel.transform, fontToUse, titleText, 20, FontStyle.Bold);
+            RectTransform titleRect = _titleValueText.GetComponent<RectTransform>();
             titleRect.sizeDelta = new Vector2(280f, 32f);
             titleRect.anchoredPosition = new Vector2(0f, 52f);
 
-            Text scoreLabel = CreateText("ScoreLabel", _panel.transform, fontToUse, scoreLabelText, 12, FontStyle.Normal);
-            RectTransform scoreLabelRect = scoreLabel.GetComponent<RectTransform>();
-            scoreLabelRect.sizeDelta = new Vector2(200f, 20f);
-            scoreLabelRect.anchoredPosition = new Vector2(0f, 15f);
+            _valueLabelText = CreateText("ValueLabel", _panel.transform, fontToUse, scoreLabelText, 12, FontStyle.Normal);
+            RectTransform valueLabelRect = _valueLabelText.GetComponent<RectTransform>();
+            valueLabelRect.sizeDelta = new Vector2(200f, 20f);
+            valueLabelRect.anchoredPosition = new Vector2(0f, 15f);
 
-            _scoreValueText = CreateText("ScoreValue", _panel.transform, fontToUse, "0", 16, FontStyle.Bold);
-            RectTransform scoreValueRect = _scoreValueText.GetComponent<RectTransform>();
-            scoreValueRect.sizeDelta = new Vector2(200f, 24f);
-            scoreValueRect.anchoredPosition = new Vector2(0f, -5f);
+            _valueText = CreateText("ValueText", _panel.transform, fontToUse, "0", 16, FontStyle.Bold);
+            RectTransform valueRect = _valueText.GetComponent<RectTransform>();
+            valueRect.sizeDelta = new Vector2(200f, 24f);
+            valueRect.anchoredPosition = new Vector2(0f, -5f);
 
-            _restartButton = CreateButton("RestartButton", _panel.transform, fontToUse, restartLabelText);
-            RectTransform buttonRect = _restartButton.GetComponent<RectTransform>();
+            _primaryActionButton = CreateButton("PrimaryActionButton", _panel.transform, fontToUse, restartLabelText, out _primaryActionText);
+            RectTransform buttonRect = _primaryActionButton.GetComponent<RectTransform>();
             buttonRect.sizeDelta = new Vector2(140f, 26f);
             buttonRect.anchoredPosition = new Vector2(0f, -55f);
-
-            _restartButton.onClick.AddListener(Restart);
 
             _isBuilt = true;
         }
@@ -174,7 +263,7 @@ namespace Spelunky {
             return textComponent;
         }
 
-        private Button CreateButton(string name, Transform parent, Font font, string label) {
+        private Button CreateButton(string name, Transform parent, Font font, string label, out Text labelText) {
             GameObject go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
             go.transform.SetParent(parent, false);
 
@@ -189,7 +278,7 @@ namespace Spelunky {
             colors.selectedColor = buttonHighlightColor;
             button.colors = colors;
 
-            Text labelText = CreateText("Label", go.transform, font, label, 14, FontStyle.Bold);
+            labelText = CreateText("Label", go.transform, font, label, 14, FontStyle.Bold);
             labelText.raycastTarget = false;
 
             RectTransform labelRect = labelText.GetComponent<RectTransform>();
@@ -206,14 +295,12 @@ namespace Spelunky {
             return button;
         }
 
-        private void Show(int score) {
+        public void Show(ResultViewModel result) {
             if (!_isBuilt) {
                 BuildUI();
             }
 
-            if (_scoreValueText != null) {
-                _scoreValueText.text = score.ToString();
-            }
+            ApplyResult(result);
 
             if (_panel != null) {
                 _panel.SetActive(true);
@@ -221,9 +308,25 @@ namespace Spelunky {
 
             EnsureEventSystem();
 
-            if (_restartButton != null) {
-                _restartButton.Select();
+            if (_primaryActionButton != null) {
+                _primaryActionButton.Select();
             }
+        }
+
+        public void ShowGameOverScreen(int score) {
+            ShowGameOverScreen(score, SceneManager.GetActiveScene().name);
+        }
+
+        public void ShowGameOverScreen(int score, string restartSceneName) {
+            Show(CreateConfiguredGameOverResultModel(score, restartSceneName));
+        }
+
+        public void ShowRunClearScreen(int gold, float elapsedSeconds, string restartSceneName) {
+            Show(CreateConfiguredRunClearResultModel(gold, elapsedSeconds, restartSceneName));
+        }
+
+        public void HideResult() {
+            Hide();
         }
 
         private void Hide() {
@@ -234,7 +337,102 @@ namespace Spelunky {
 
         private void Restart() {
             Scene activeScene = SceneManager.GetActiveScene();
-            SceneManager.LoadScene(activeScene.buildIndex);
+            UIManager.Instance?.ResetGameplayUI();
+            CreateRestartAction(activeScene.name)?.Invoke();
+        }
+
+        private void ApplyResult(ResultViewModel result) {
+            if (result == null) {
+                result = CreateConfiguredGameOverResultModel(0, SceneManager.GetActiveScene().name);
+            }
+
+            if (_titleValueText != null) {
+                _titleValueText.text = string.IsNullOrEmpty(result.Title) ? GetDefaultTitle(result.Preset) : result.Title;
+            }
+
+            if (_valueLabelText != null) {
+                _valueLabelText.text = string.IsNullOrEmpty(result.ValueLabel) ? GetDefaultValueLabel(result.Preset) : result.ValueLabel;
+            }
+
+            if (_valueText != null) {
+                _valueText.text = string.IsNullOrEmpty(result.ValueText) ? "0" : result.ValueText;
+            }
+
+            if (_primaryActionText != null) {
+                _primaryActionText.text = string.IsNullOrEmpty(result.PrimaryActionLabel) ? GetDefaultPrimaryActionLabel(result.Preset) : result.PrimaryActionLabel;
+            }
+
+            if (_primaryActionButton != null) {
+                _primaryActionButton.onClick.RemoveAllListeners();
+                _primaryActionButton.onClick.AddListener(result.PrimaryAction ?? Restart);
+            }
+        }
+
+        private static UnityAction CreateRestartAction(string sceneName) {
+            return () => {
+                if (RunManager.Instance != null) {
+                    RunManager.Instance.RestartRun(sceneName);
+                    return;
+                }
+
+                Scene activeScene = SceneManager.GetActiveScene();
+                SceneManager.LoadScene(activeScene.buildIndex);
+            };
+        }
+
+        private ResultViewModel CreateConfiguredGameOverResultModel(int score, string restartSceneName) {
+            return new ResultViewModel {
+                Preset = ResultPreset.GameOver,
+                Title = titleText,
+                ValueLabel = scoreLabelText,
+                ValueText = score.ToString(),
+                PrimaryActionLabel = restartLabelText,
+                PrimaryAction = CreateRestartAction(restartSceneName)
+            };
+        }
+
+        private ResultViewModel CreateConfiguredRunClearResultModel(int gold, float elapsedSeconds, string restartSceneName) {
+            return new ResultViewModel {
+                Preset = ResultPreset.RunClear,
+                Title = runClearTitleText,
+                ValueLabel = runClearValueLabelText,
+                ValueText = $"{gold}\n{elapsedSeconds:0.0}s",
+                PrimaryActionLabel = runClearRestartLabelText,
+                PrimaryAction = CreateRestartAction(restartSceneName)
+            };
+        }
+
+        private string GetDefaultTitle(ResultPreset preset) {
+            switch (preset) {
+                case ResultPreset.RunClear:
+                    return runClearTitleText;
+                case ResultPreset.GameOver:
+                case ResultPreset.Custom:
+                default:
+                    return titleText;
+            }
+        }
+
+        private string GetDefaultValueLabel(ResultPreset preset) {
+            switch (preset) {
+                case ResultPreset.RunClear:
+                    return runClearValueLabelText;
+                case ResultPreset.GameOver:
+                case ResultPreset.Custom:
+                default:
+                    return scoreLabelText;
+            }
+        }
+
+        private string GetDefaultPrimaryActionLabel(ResultPreset preset) {
+            switch (preset) {
+                case ResultPreset.RunClear:
+                    return runClearRestartLabelText;
+                case ResultPreset.GameOver:
+                case ResultPreset.Custom:
+                default:
+                    return restartLabelText;
+            }
         }
 
         private static void EnsureEventSystem() {

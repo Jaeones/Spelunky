@@ -1,14 +1,21 @@
 using UnityEngine;
 using UnityEngine.UI;
+using System.Collections.Generic;
+using System.Collections;
 
 namespace Spelunky {
 
     [RequireComponent(typeof(Player))]
     public class PlayerUI : MonoBehaviour {
 
+        [Header("HUD Binding")]
+        [SerializeField] private PlayerHUDReferences hudBinding;
+
         [Header("Accessories")]
         public GameObject accessoryIconPrefab;
         public Transform accessoriesContainer;
+
+        private static readonly Dictionary<AccessoryType, Sprite> AccessoryIconCache = new Dictionary<AccessoryType, Sprite>();
 
         private Player _player;
         private Text _lifeAmountText;
@@ -30,12 +37,11 @@ namespace Spelunky {
 
         private void Awake() {
             _player = GetComponent<Player>();
-            _lifeAmountText = GameObject.Find("LifeAmountText").GetComponent<Text>();
-            _bombAmountText = GameObject.Find("BombAmountText").GetComponent<Text>();
-            _ropeAmountText = GameObject.Find("RopeAmountText").GetComponent<Text>();
-            _totalGoldAmountText = GameObject.Find("TotalGoldAmountText").GetComponent<Text>();
-            _currentGoldAmountText = GameObject.Find("CurrentGoldAmountText").GetComponent<Text>();
-            accessoriesContainer = GameObject.Find("AccessoriesUIContainer").transform;
+            if (!TryResolveHudReferences()) {
+                Debug.LogError("PlayerUI: Failed to resolve HUD references. Assign a PlayerHUDReferences binding in the scene.", this);
+                enabled = false;
+                return;
+            }
 
             _player.Health.HealthChangedEvent.AddListener(OnHealthChanged);
             _player.Inventory.BombsChangedEvent.AddListener(OnBombsChanged);
@@ -43,11 +49,15 @@ namespace Spelunky {
             _player.Inventory.GoldAmountChangedEvent.AddListener(OnGoldChanged);
             _player.Accessories.AccessoryAdded += OnAccessoryAdded;
 
-            // The hackiest of hacks to ensure the black background on the HUD actually cover all the elements.
-            // Otherwise it doesn't until you pickup the first piece of gold.
-            _canvasObject = GameObject.Find("PlayerUICanvas");
-            _canvasObject.SetActive(false);
-            _canvasObject.SetActive(true);
+            RefreshAllValues();
+            RefreshCanvasHack();
+        }
+
+        private IEnumerator Start() {
+            // RunManager restores persisted accessories after player instantiation.
+            // Re-sync once on the next frame so stage transitions rebuild the HUD from real state.
+            yield return null;
+            SyncAccessoryHudToPlayerState();
         }
 
         private void Update() {
@@ -102,17 +112,221 @@ namespace Spelunky {
             _totalGoldAmountText.text = _totalGoldAmount.ToString();
         }
 
-        private void OnAccessoryAdded(Sprite icon) {
+        private void OnAccessoryAdded(AccessoryType type, Sprite icon) {
+            Sprite resolvedIcon = ResolveAccessoryIcon(type, icon);
+            if (resolvedIcon == null) {
+                return;
+            }
+
+            AddAccessoryIcon(resolvedIcon);
+        }
+
+        private void OnDestroy() {
+            if (_player != null) {
+                if (_player.Health != null) {
+                    _player.Health.HealthChangedEvent.RemoveListener(OnHealthChanged);
+                }
+
+                if (_player.Inventory != null) {
+                    _player.Inventory.BombsChangedEvent.RemoveListener(OnBombsChanged);
+                    _player.Inventory.RopesChangedEvent.RemoveListener(OnRopesChanged);
+                    _player.Inventory.GoldAmountChangedEvent.RemoveListener(OnGoldChanged);
+                }
+            }
+
+            if (_player != null && _player.Accessories != null) {
+                _player.Accessories.AccessoryAdded -= OnAccessoryAdded;
+            }
+        }
+
+        private bool TryResolveHudReferences() {
+            if (TryApplyBinding(hudBinding)) {
+                return true;
+            }
+
+            UIManager manager = UIManager.EnsureInstance();
+            if (manager != null && TryApplyBinding(manager.PlayerHUD)) {
+                return true;
+            }
+
+            if (TryApplyBinding(FindObjectOfType<PlayerHUDReferences>())) {
+                return true;
+            }
+
+            return TryResolveLegacyHudReferences();
+        }
+
+        private bool TryApplyBinding(PlayerHUDReferences binding) {
+            if (binding == null) {
+                return false;
+            }
+
+            binding.AutoAssignMissingReferences();
+
+            _lifeAmountText = binding.LifeAmountText;
+            _bombAmountText = binding.BombAmountText;
+            _ropeAmountText = binding.RopeAmountText;
+            _totalGoldAmountText = binding.TotalGoldAmountText;
+            _currentGoldAmountText = binding.CurrentGoldAmountText;
+            accessoriesContainer = binding.AccessoriesContainer;
+            _canvasObject = binding.CanvasRoot;
+            hudBinding = binding;
+
+            return HasResolvedHudReferences();
+        }
+
+        private bool TryResolveLegacyHudReferences() {
+            // Temporary fallback for scenes that have not been wired through PlayerHUDReferences or UIManager yet.
+            Canvas[] canvases = FindObjectsOfType<Canvas>();
+            for (int i = 0; i < canvases.Length; i++) {
+                if (!TryResolveLegacyHudReferencesFromRoot(canvases[i].transform)) {
+                    continue;
+                }
+
+                _canvasObject = canvases[i].gameObject;
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool HasResolvedHudReferences() {
+            return _lifeAmountText != null &&
+                _bombAmountText != null &&
+                _ropeAmountText != null &&
+                _totalGoldAmountText != null &&
+                _currentGoldAmountText != null &&
+                accessoriesContainer != null &&
+                _canvasObject != null;
+        }
+
+        private bool TryResolveLegacyHudReferencesFromRoot(Transform root) {
+            if (root == null) {
+                return false;
+            }
+
+            _lifeAmountText = FindTextWithinRoot(root, "LifeAmountText");
+            _bombAmountText = FindTextWithinRoot(root, "BombAmountText");
+            _ropeAmountText = FindTextWithinRoot(root, "RopeAmountText");
+            _totalGoldAmountText = FindTextWithinRoot(root, "TotalGoldAmountText");
+            _currentGoldAmountText = FindTextWithinRoot(root, "CurrentGoldAmountText");
+            accessoriesContainer = FindChildRecursive(root, "AccessoriesUIContainer");
+
+            return _lifeAmountText != null &&
+                _bombAmountText != null &&
+                _ropeAmountText != null &&
+                _totalGoldAmountText != null &&
+                _currentGoldAmountText != null &&
+                accessoriesContainer != null;
+        }
+
+        private static Text FindTextWithinRoot(Transform root, string objectName) {
+            Transform target = FindChildRecursive(root, objectName);
+            return target != null ? target.GetComponent<Text>() : null;
+        }
+
+        private static Transform FindChildRecursive(Transform parent, string targetName) {
+            if (parent == null) {
+                return null;
+            }
+
+            if (parent.name == targetName) {
+                return parent;
+            }
+
+            for (int i = 0; i < parent.childCount; i++) {
+                Transform child = parent.GetChild(i);
+                Transform result = FindChildRecursive(child, targetName);
+                if (result != null) {
+                    return result;
+                }
+            }
+
+            return null;
+        }
+
+        private void RefreshAllValues() {
+            OnHealthChanged();
+            OnBombsChanged();
+            OnRopesChanged();
+
+            _currentGoldAmount = 0;
+            _totalGoldAmount = _player.Inventory.goldAmount;
+            _currentGoldAmountText.text = " +0";
+            _currentGoldAmountText.gameObject.SetActive(false);
+            _totalGoldAmountText.text = _totalGoldAmount.ToString();
+            SyncAccessoryHudToPlayerState();
+        }
+
+        private void RefreshCanvasHack() {
+            if (_canvasObject == null) {
+                return;
+            }
+
+            // Temporary compatibility hack until the HUD background is driven by layout instead of a forced refresh.
+            _canvasObject.SetActive(false);
+            _canvasObject.SetActive(true);
+        }
+
+        private void SyncAccessoryHudToPlayerState() {
+            if (accessoriesContainer == null || _player == null || _player.Accessories == null) {
+                return;
+            }
+
+            ClearAccessoryIcons();
+
+            AccessoryType[] accessoryTypes = {
+                AccessoryType.ClimbingGlove,
+                AccessoryType.SpringBoots,
+                AccessoryType.PitchersMitt,
+                AccessoryType.Paste
+            };
+
+            for (int i = 0; i < accessoryTypes.Length; i++) {
+                AccessoryType accessoryType = accessoryTypes[i];
+                if (!_player.Accessories.HasAccessory(accessoryType)) {
+                    continue;
+                }
+
+                Sprite icon = ResolveAccessoryIcon(accessoryType);
+                if (icon == null) {
+                    continue;
+                }
+
+                AddAccessoryIcon(icon);
+            }
+        }
+
+        private void ClearAccessoryIcons() {
+            for (int i = accessoriesContainer.childCount - 1; i >= 0; i--) {
+                Transform child = accessoriesContainer.GetChild(i);
+                if (child == null) {
+                    continue;
+                }
+
+                child.gameObject.SetActive(false);
+                Destroy(child.gameObject);
+            }
+        }
+
+        private Sprite ResolveAccessoryIcon(AccessoryType type, Sprite icon = null) {
+            if (icon != null) {
+                AccessoryIconCache[type] = icon;
+                return icon;
+            }
+
+            return AccessoryIconCache.TryGetValue(type, out Sprite cachedIcon) ? cachedIcon : null;
+        }
+
+        private void AddAccessoryIcon(Sprite icon) {
+            if (accessoriesContainer == null || accessoryIconPrefab == null || icon == null) {
+                return;
+            }
+
             GameObject iconInstance = Instantiate(accessoryIconPrefab, accessoriesContainer);
             Image image = iconInstance.GetComponent<Image>();
             if (image != null) {
                 image.sprite = icon;
-            }
-        }
-
-        private void OnDestroy() {
-            if (_player != null && _player.Accessories != null) {
-                _player.Accessories.AccessoryAdded -= OnAccessoryAdded;
             }
         }
 

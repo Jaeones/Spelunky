@@ -84,10 +84,17 @@ namespace Spelunky {
                 _pendingRemoveEarly.Clear();
             }
 
+            PruneInvalidEarlyTickables();
+
             // Update all early tickables
             _isIterating = true;
             for (int i = 0; i < _earlyTickables.Count; i++) {
-                _earlyTickables[i].EarlyTick();
+                IEarlyTickable tickable = _earlyTickables[i];
+                if (tickable == null) {
+                    continue;
+                }
+
+                tickable.EarlyTick();
             }
             _isIterating = false;
         }
@@ -257,6 +264,26 @@ namespace Spelunky {
             } else {
                 _earlyTickables.Remove(earlyTickable);
             }
+        }
+
+        private void PruneInvalidEarlyTickables() {
+            for (int i = _earlyTickables.Count - 1; i >= 0; i--) {
+                if (!IsValidEarlyTickable(_earlyTickables[i])) {
+                    _earlyTickables.RemoveAt(i);
+                }
+            }
+        }
+
+        private static bool IsValidEarlyTickable(IEarlyTickable tickable) {
+            if (tickable == null) {
+                return false;
+            }
+
+            if (tickable is Behaviour behaviour) {
+                return behaviour != null && behaviour.isActiveAndEnabled;
+            }
+
+            return true;
         }
     }
 

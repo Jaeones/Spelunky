@@ -1,7 +1,6 @@
 using System.Collections;
 using TwiiK.Utility;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace Spelunky {
 
@@ -34,7 +33,12 @@ namespace Spelunky {
         }
 
         private IEnumerator EnterDoor() {
-            player.Physics.SetPosition(new Vector2(player._exitDoor.transform.position.x + Tile.Width / 2f, player._exitDoor.transform.position.y));
+            Exit exitDoor = player._exitDoor;
+            if (exitDoor == null) {
+                yield break;
+            }
+
+            player.Physics.SetPosition(new Vector2(exitDoor.transform.position.x + Tile.Width / 2f, exitDoor.transform.position.y));
 
             player.Visuals.animator.Play(enterDoorAnimation);
 
@@ -49,9 +53,7 @@ namespace Spelunky {
                 yield return null;
             }
 
-            // TODO: This is just temporary. We should load the next level here, while obviously saving character stats.
-            Scene scene = SceneManager.GetActiveScene();
-            SceneManager.LoadScene(scene.name);
+            exitDoor?.HandlePlayerEntered(player);
         }
 
     }

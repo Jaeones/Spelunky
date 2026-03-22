@@ -17,6 +17,10 @@ namespace Spelunky {
         }
 
         private void OnEnable() {
+            if (_player == null) {
+                _player = GetComponent<Player>();
+            }
+
             EntityManager.Instance?.RegisterEarlyTickable(this);
         }
 
@@ -26,39 +30,51 @@ namespace Spelunky {
 
         // IEarlyTickable implementation
         public void EarlyTick() {
-            if (_player.CurrentPlayerState.LockInput()) {
+            if (_player == null) {
+                _player = GetComponent<Player>();
+                if (_player == null) {
+                    return;
+                }
+            }
+
+            PlayerState currentState = _player.CurrentPlayerState;
+            if (currentState == null) {
+                return;
+            }
+
+            if (currentState.LockInput()) {
                 return;
             }
 
             Vector2 directionalInput = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
             directionalInput.x = Mathf.Abs(directionalInput.x) < joystickDeadzone ? 0 : directionalInput.x;
             directionalInput.y = Mathf.Abs(directionalInput.y) < joystickDeadzone ? 0 : directionalInput.y;
-            _player.CurrentPlayerState.OnDirectionalInput(directionalInput);
+            currentState.OnDirectionalInput(directionalInput);
 
             _player.sprinting = Input.GetButton("Sprint Keyboard") || Input.GetAxisRaw("Sprint Controller") != 0;
 
             if (Input.GetButtonDown("Jump")) {
-                _player.CurrentPlayerState.OnJumpInputDown();
+                currentState.OnJumpInputDown();
             }
 
             if (Input.GetButtonUp("Jump")) {
-                _player.CurrentPlayerState.OnJumpInputUp();
+                currentState.OnJumpInputUp();
             }
 
             if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.Joystick1Button1)) {
-                _player.CurrentPlayerState.OnBombInputDown();
+                currentState.OnBombInputDown();
             }
 
             if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.Joystick1Button3)) {
-                _player.CurrentPlayerState.OnRopeInputDown();
+                currentState.OnRopeInputDown();
             }
 
             if (Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Joystick1Button5)) {
-                _player.CurrentPlayerState.OnUseInputDown();
+                currentState.OnUseInputDown();
             }
 
             if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.Joystick1Button2)) {
-                _player.CurrentPlayerState.OnAttackInputDown();
+                currentState.OnAttackInputDown();
             }
         }
 

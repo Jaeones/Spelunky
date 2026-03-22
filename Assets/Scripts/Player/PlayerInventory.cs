@@ -61,6 +61,22 @@ namespace Spelunky {
             GoldAmountChangedEvent?.Invoke(amount);
         }
 
+        public void SetBombs(int amount) {
+            numberOfBombs = Mathf.Max(0, amount);
+            BombsChangedEvent?.Invoke();
+        }
+
+        public void SetRopes(int amount) {
+            numberOfRopes = Mathf.Max(0, amount);
+            RopesChangedEvent?.Invoke();
+        }
+
+        public void SetGold(int amount) {
+            int delta = amount - goldAmount;
+            goldAmount = Mathf.Max(0, amount);
+            GoldAmountChangedEvent?.Invoke(delta);
+        }
+
     }
 
 }

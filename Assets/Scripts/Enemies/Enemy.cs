@@ -204,7 +204,9 @@ namespace Spelunky {
             }
 
             player.requestedVelocity = knockback;
-            player.Health.TakeDamage(damage);
+            using (DebugDamageContext.Use($"EnemyDamage:{name}")) {
+                player.Health.TakeDamage(damage);
+            }
         }
 
         public bool IsCrushable => true;

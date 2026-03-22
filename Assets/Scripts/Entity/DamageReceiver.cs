@@ -113,14 +113,18 @@ namespace Spelunky {
             float interval = damageArea.damageInterval;
             if (interval <= 0f) {
                 if (isEnter) {
-                    _damageable.TryTakeDamage(damageArea.damage);
+                    using (DebugDamageContext.Use($"DamageArea:{damageArea.name}")) {
+                        _damageable.TryTakeDamage(damageArea.damage);
+                    }
                 }
                 return;
             }
 
             float now = Time.time;
             if (!_nextDamageTime.TryGetValue(damageArea, out float nextTime) || now >= nextTime) {
-                _damageable.TryTakeDamage(damageArea.damage);
+                using (DebugDamageContext.Use($"DamageArea:{damageArea.name}")) {
+                    _damageable.TryTakeDamage(damageArea.damage);
+                }
                 _nextDamageTime[damageArea] = now + interval;
             }
         }

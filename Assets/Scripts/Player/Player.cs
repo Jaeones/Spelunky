@@ -1,4 +1,3 @@
-using Gizmos = Popcron.Gizmos;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -154,11 +153,6 @@ namespace Spelunky {
 
         public void Tick() {
             if (_isAttacking) {
-                Gizmos.Square(
-                    (Vector2)transform.position + new Vector2Int(whipOffset.x * Visuals.facingDirection, whipOffset.y),
-                    whipDamageArea,
-                    Color.yellow
-                );
                 UpdateAttack();
             }
 
@@ -394,7 +388,9 @@ namespace Spelunky {
 
         public void Crush() {
             if (!ReferenceEquals(stateMachine.CurrentState, splatState)) {
-                Health.TakeDamage(Health.CurrentHealth);
+                using (DebugDamageContext.Use("Crush")) {
+                    Health.TakeDamage(Health.CurrentHealth);
+                }
             }
         }
 
@@ -493,7 +489,9 @@ namespace Spelunky {
             ApplyKnockback(knockback);
 
             enemy.NotifyContactWithPlayer(this);
-            Health.TakeDamage(enemy.damage);
+            using (DebugDamageContext.Use($"EnemyContact:{enemy.name}")) {
+                Health.TakeDamage(enemy.damage);
+            }
         }
 
         private void ApplyKnockback(Vector2 knockback) {
@@ -529,53 +527,6 @@ namespace Spelunky {
                 Physics.collisionInfo.fallingThroughPlatform = false;
                 _fallThroughTimer = null;
             });
-        }
-
-        // TODO: Make it so that we can show debug info for whatever entity we select.
-        private void OnGUI() {
-            string[] debugInfo = {
-                "--- Player info ---",
-                "State: " + stateMachine.CurrentState.GetType().Name,
-                "Position X: " + transform.position.x,
-                "Position Y: " + transform.position.y,
-                "--- Physics info --- ",
-                "Requested Velocity X: " + requestedVelocity.x,
-                "Requested Velocity Y: " + requestedVelocity.y,
-                "Velocity X: " + Physics.Velocity.x,
-                "Velocity Y: " + Physics.Velocity.y,
-                "--- Physics Collision info --- ",
-                "Down: " + Physics.collisionInfo.down,
-                "Left: " + Physics.collisionInfo.left,
-                "Right: " + Physics.collisionInfo.right,
-                "Up: " + Physics.collisionInfo.up,
-                "Collider horizontal: " + Physics.collisionInfo.colliderHorizontal,
-                "Collider vertical: " + Physics.collisionInfo.colliderVertical,
-                "Falling through platform: " + Physics.collisionInfo.fallingThroughPlatform
-            };
-            for (int i = 0; i < debugInfo.Length; i++) {
-                GUI.Label(new Rect(8, 100 + 16 * i, 300, 22), debugInfo[i]);
-            }
-
-            MovingPlatform ridingPlatform = null;
-            if (Physics.collisionInfo.colliderVertical != null) {
-                ridingPlatform = Physics.collisionInfo.colliderVertical.GetComponent<MovingPlatform>();
-            }
-
-            string[] platformDebugInfo = {
-                "--- Platform info ---",
-                "Standing on MovingPlatform: " + (ridingPlatform != null),
-                "Platform name: " + (ridingPlatform != null ? ridingPlatform.name : "n/a"),
-                "Platform last step: " + (ridingPlatform != null ? ridingPlatform.LastStep.ToString() : "n/a"),
-                "Platform has rider: " + (ridingPlatform != null && ridingPlatform.IsRiderRegistered(Physics)),
-                "Hanging from: " + (ReferenceEquals(stateMachine.CurrentState, hangingState) && hangingState.colliderToHangFrom != null
-                    ? hangingState.colliderToHangFrom.name
-                    : "n/a")
-            };
-
-            int platformStartY = 100 + 16 * debugInfo.Length + 8;
-            for (int i = 0; i < platformDebugInfo.Length; i++) {
-                GUI.Label(new Rect(8, platformStartY + 16 * i, 300, 22), platformDebugInfo[i]);
-            }
         }
 
     }

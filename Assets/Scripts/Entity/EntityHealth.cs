@@ -44,6 +44,15 @@ namespace Spelunky {
                 CurrentHealth = 0;
             }
 
+            if (CurrentHealth <= 0 && TryGetComponent(out Player _)) {
+                string deathCause = DebugDamageContext.CurrentCause;
+                if (_isCrushDeath && deathCause == DebugDamageContext.UnknownCause) {
+                    deathCause = "Crush";
+                }
+
+                RunManager.Instance?.SetPendingDeathCause(deathCause);
+            }
+
             HealthChangedEvent?.Invoke();
             
             if (CurrentHealth <= 0) {
@@ -67,6 +76,21 @@ namespace Spelunky {
 
         private void SetHealth(int value) {
             CurrentHealth = value;
+            HealthChangedEvent?.Invoke();
+        }
+
+        public void SetCurrentHealth(int value) {
+            CurrentHealth = Mathf.Clamp(value, 0, Mathf.Max(1, maxHealth));
+            HealthChangedEvent?.Invoke();
+        }
+
+        public void SetMaxHealth(int value, bool refillCurrentHealth = false) {
+            maxHealth = Mathf.Max(1, value);
+            if (refillCurrentHealth || CurrentHealth > maxHealth) {
+                SetCurrentHealth(maxHealth);
+                return;
+            }
+
             HealthChangedEvent?.Invoke();
         }
 

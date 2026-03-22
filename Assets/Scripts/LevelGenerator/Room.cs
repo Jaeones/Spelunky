@@ -63,24 +63,102 @@ namespace Spelunky {
         /// <returns></returns>
         public Tile GetSuitableEntranceOrExitTile() {
             Tile[] roomTiles = GetRoomTiles();
-            List<Tile> suitableTiles = new List<Tile>();
+            List<Tile> preferredTiles = new List<Tile>();
+            List<Tile> fallbackTiles = new List<Tile>();
 
             foreach (Tile tile in roomTiles) {
-                // TODO: We only want to spawn the exit on a "normal" tile. Find a better and more generic solution for determining this.
-                if (!tile.name.Contains("Dirt")) {
+                if (!CanSpawnEntranceOrExitOnTile(tile)) {
                     continue;
                 }
 
-                // If there is an empty space above the tile we can spawn a door here, but make sure we don't try to
-                // spawn a door out of bounds or so far up it's on the bottom of the room above us.
-                int yPositionToCheck = tile.y + 1;
-                int roomMaxYPosition = (int)(index.y + 1) * LevelGenerator.RoomHeight - 1;
-                if (yPositionToCheck < roomMaxYPosition && yPositionToCheck < LevelGenerator.instance.Tiles.GetLength(1) - 1 && LevelGenerator.instance.Tiles[tile.x, yPositionToCheck] == null) {
-                    suitableTiles.Add(tile);
+                if (LevelGenerator.instance.IsValidEntranceExitTile(tile)) {
+                    preferredTiles.Add(tile);
+                }
+                else if (IsFallbackEntranceExitFloor(tile)) {
+                    // Stage-specific naming can drift before all door hints are curated.
+                    // Fall back to any solid floor tile in the room so in-place stage transitions stay playable.
+                    fallbackTiles.Add(tile);
                 }
             }
 
-            return suitableTiles.Count > 0 ? suitableTiles[Random.Range(0, suitableTiles.Count)] : null;
+            if (preferredTiles.Count > 0) {
+                return preferredTiles[Random.Range(0, preferredTiles.Count)];
+            }
+
+            return fallbackTiles.Count > 0 ? fallbackTiles[Random.Range(0, fallbackTiles.Count)] : null;
+        }
+
+        public string GetEntranceExitDebugSummary() {
+            Tile[] roomTiles = GetRoomTiles();
+            int spawnableTileCount = 0;
+            int preferredTileCount = 0;
+            int fallbackTileCount = 0;
+            HashSet<string> sampleTileNames = new HashSet<string>();
+
+            foreach (Tile tile in roomTiles) {
+                if (tile == null) {
+                    continue;
+                }
+
+                if (sampleTileNames.Count < 6) {
+                    sampleTileNames.Add(tile.name);
+                }
+
+                if (!CanSpawnEntranceOrExitOnTile(tile)) {
+                    continue;
+                }
+
+                spawnableTileCount++;
+                if (LevelGenerator.instance.IsValidEntranceExitTile(tile)) {
+                    preferredTileCount++;
+                }
+                else if (IsFallbackEntranceExitFloor(tile)) {
+                    fallbackTileCount++;
+                }
+            }
+
+            string sampleSummary = sampleTileNames.Count > 0 ? string.Join(", ", sampleTileNames) : "none";
+            return $"room={name} index={index} totalTiles={roomTiles.Length} spawnable={spawnableTileCount} preferred={preferredTileCount} fallback={fallbackTileCount} samples=[{sampleSummary}]";
+        }
+
+        private bool CanSpawnEntranceOrExitOnTile(Tile tile) {
+            if (tile == null) {
+                return false;
+            }
+
+            // If there is an empty space above the tile we can spawn a door here, but make sure we don't try to
+            // spawn a door out of bounds or so far up it's on the bottom of the room above us.
+            int yPositionToCheck = tile.y + 1;
+            int roomMaxYPosition = (int)(index.y + 1) * LevelGenerator.RoomHeight - 1;
+            return yPositionToCheck < roomMaxYPosition &&
+                yPositionToCheck < LevelGenerator.instance.Tiles.GetLength(1) - 1 &&
+                LevelGenerator.instance.Tiles[tile.x, yPositionToCheck] == null;
+        }
+
+        private static bool IsFallbackEntranceExitFloor(Tile tile) {
+            if (tile == null) {
+                return false;
+            }
+
+            if (tile.CompareTag("Ladder") || tile.CompareTag("OneWayPlatform") || tile.CompareTag("Block")) {
+                return false;
+            }
+
+            string tileName = tile.name.ToLowerInvariant();
+            if (tileName.Contains("arrowtrap") ||
+                tileName.Contains("spike") ||
+                tileName.Contains("altar") ||
+                tileName.Contains("entrance") ||
+                tileName.Contains("exit")) {
+                return false;
+            }
+
+            return tile.hasDecorations ||
+                tileName.Contains("dirt") ||
+                tileName.Contains("floor") ||
+                tileName.Contains("temple") ||
+                tileName.Contains("metal") ||
+                tileName.Contains("dais");
         }
 
     }

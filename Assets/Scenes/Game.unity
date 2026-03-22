@@ -158,7 +158,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
   m_AnchoredPosition: {x: 18, y: 0}
-  m_SizeDelta: {x: 0, y: 16}
+  m_SizeDelta: {x: 12.8125, y: 16}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &28306172
 MonoBehaviour:
@@ -286,6 +286,15 @@ MonoBehaviour:
   specialRooms:
   - {fileID: 6398162121198865019, guid: 73171b8aad92e084fb44c2d77eccb58b, type: 3}
   - {fileID: 6398162121198865019, guid: 3b4ca8af042360c449327da3e235e2fa, type: 3}
+  stageDefinitions:
+  - {fileID: 11400000, guid: 83fbac1277ea44c6835d09f8efbe69b3, type: 2}
+  - {fileID: 11400000, guid: 233b5184bf624d79af0d3955159a6f78, type: 2}
+  - {fileID: 11400000, guid: 5e8c53af21c54fd0b11aa8f6a14d0d7c, type: 2}
+  - {fileID: 11400000, guid: 1bc0e9d4f6cf4a0b82413a8d5bf0d4aa, type: 2}
+  currentStageIndex: 0
+  syncStageNumberFromRunManager: 1
+  expectedStageCount: 4
+  activeStageConfigurationSummary: 
   entrance: {fileID: 0}
   exit: {fileID: 0}
 --- !u!1 &91530674
@@ -469,7 +478,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
   m_AnchoredPosition: {x: 2, y: -2}
-  m_SizeDelta: {x: 0, y: 16}
+  m_SizeDelta: {x: 30.8125, y: 16}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &346147939
 MonoBehaviour:
@@ -693,7 +702,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 20}
+  m_SizeDelta: {x: 213.6875, y: 20}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &609958590
 MonoBehaviour:
@@ -841,7 +850,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 16}
+  m_SizeDelta: {x: 69.25, y: 16}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &813139756
 MonoBehaviour:
@@ -1306,6 +1315,7 @@ GameObject:
   - component: {fileID: 1342622101}
   - component: {fileID: 1342622100}
   - component: {fileID: 1342622099}
+  - component: {fileID: 1342622103}
   m_Layer: 5
   m_Name: PlayerUICanvas
   m_TagString: Untagged
@@ -1396,6 +1406,25 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
+--- !u!114 &1342622103
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1342622098}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4fdc96f7aa9249079f71f54de5b33f01, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  lifeAmountText: {fileID: 1948619981}
+  bombAmountText: {fileID: 2051510657}
+  ropeAmountText: {fileID: 28306172}
+  totalGoldAmountText: {fileID: 1600798305}
+  currentGoldAmountText: {fileID: 509374022}
+  accessoriesContainer: {fileID: 91530675}
+  canvasRoot: {fileID: 1342622098}
 --- !u!1 &1438897274
 GameObject:
   m_ObjectHideFlags: 0
@@ -2070,6 +2099,9 @@ MonoBehaviour:
   titleText: GAME OVER
   scoreLabelText: SCORE
   restartLabelText: RESTART
+  runClearTitleText: RUN CLEAR
+  runClearValueLabelText: GOLD / TIME
+  runClearRestartLabelText: RESTART
 --- !u!4 &1963536110
 Transform:
   m_ObjectHideFlags: 0

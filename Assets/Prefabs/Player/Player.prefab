@@ -501,6 +501,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a374219a41aa83a499c63cd25d0f5b90, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  hudBinding: {fileID: 0}
   accessoryIconPrefab: {fileID: 4353989848302145078, guid: e3534961be6294341a739af9b9ca58d7,
     type: 3}
   accessoriesContainer: {fileID: 0}

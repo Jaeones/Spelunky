@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 85f6db487ceb47f4a8e74a0cb9fd55de, type: 3}
+  m_Name: Stage_RuinedWorks
+  m_EditorClassIdentifier: 
+  stageNumber: 3
+  stageId: stage-03
+  displayName: Ruined Works
+  targetMinutesMin: 4
+  targetMinutesMax: 7
+  roomGridWidth: 4
+  roomGridHeight: 4
+  mainPathStyle: 0
+  mainPathDownChance: 0.2
+  trapRoomChance: 0.12
+  sacrificeRoomChance: 0.04
+  maxTrapRooms: 1
+  maxSacrificeRooms: 1
+  entranceExitTileNameHints:
+  - Dirt
+  - Floor
+  clearEnemiesFromStartRoom: 1
+  clearImmediateHazardsNearEntrance: 1
+  entranceSafetyRadiusTiles: 4
+  backgroundPrefabName: Background
+  backgroundDecalPrefabNames:
+  - BackgroundDecal
+  - BackgroundDecal_2
+  backgroundDecalChance: 0.1
+  normalRooms:
+  - {fileID: 6398162121198865019, guid: 7f19fdf2b587e5a419ff5a473dc1fc7d, type: 3}
+  - {fileID: 6398162121198865019, guid: 51d6ecb5aa8aa80439b846b7392cf129, type: 3}
+  - {fileID: 6398162121198865019, guid: 5950a00e79ade6244a4776903d2b5168, type: 3}
+  - {fileID: 1143297328923257882, guid: 4d7e9f0a1b324c8ed493f5a6ab73c8de, type: 3}
+  - {fileID: 1143297328923257882, guid: 7a3456ef0178434cc9d0e1f234567890, type: 3}
+  specialRoomPools:
+  - roomType: 0
+    rooms:
+    - {fileID: 6398162121198865019, guid: 73171b8aad92e084fb44c2d77eccb58b, type: 3}
+  - roomType: 1
+    rooms:
+    - {fileID: 6398162121198865019, guid: 3b4ca8af042360c449327da3e235e2fa, type: 3}
+  allowLegacyNormalRoomFallback: 0
+  allowLegacySpecialRoomFallback: 0
+  musicTrack: {fileID: 0}
+  ambientLoop: {fileID: 0}
+  isFinalStage: 0

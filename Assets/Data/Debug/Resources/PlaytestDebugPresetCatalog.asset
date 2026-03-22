@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0c97755b628949a69d1203b69d939547, type: 3}
+  m_Name: PlaytestDebugPresetCatalog
+  m_EditorClassIdentifier: 
+  presets:
+  - label: Stage 1 Baseline
+    stageIndex: 1
+    health: 4
+    bombs: 4
+    ropes: 4
+    goal: Entry Mine baseline check
+  - label: Stage 2 Rope Pressure
+    stageIndex: 2
+    health: 4
+    bombs: 4
+    ropes: 2
+    goal: Check rope pressure without changing core tuning
+  - label: Stage 3 Bomb Pressure
+    stageIndex: 3
+    health: 3
+    bombs: 2
+    ropes: 3
+    goal: Check bomb value and shortcut pressure
+  - label: Stage 4 Clutch
+    stageIndex: 4
+    health: 2
+    bombs: 1
+    ropes: 1
+    goal: Check final-stage resource squeeze

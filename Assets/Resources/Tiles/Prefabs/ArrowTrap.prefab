@@ -147,6 +147,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   debug: 0
   spawnProbability: 100
+  canBeDestroyedByExplosion: 1
   hasDecorations: 0
   decorationUp: []
   decorationRight: []
@@ -176,7 +177,10 @@ MonoBehaviour:
   rayDistance: 160
   detectMask:
     serializedVersion: 2
-    m_Bits: 512
+    m_Bits: 68096
+  occlusionMask:
+    serializedVersion: 2
+    m_Bits: 0
   fireSound: {fileID: 8300000, guid: d841ef127a7e4884a87824b6fa097082, type: 3}
 --- !u!1 &8481008094485679546
 GameObject:

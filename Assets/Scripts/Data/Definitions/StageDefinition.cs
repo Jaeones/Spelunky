@@ -10,7 +10,8 @@ namespace Spelunky {
 
     public enum SpecialRoomType {
         Trap,
-        Sacrifice
+        Sacrifice,
+        FinalAltar
     }
 
     [System.Serializable]
@@ -46,6 +47,7 @@ namespace Spelunky {
         [Range(0f, 1f)] public float sacrificeRoomChance = 0.1f;
         [Min(0)] public int maxTrapRooms = 1;
         [Min(0)] public int maxSacrificeRooms = 1;
+        public string[] mainPathPreferredRoomNameHints;
         public string[] entranceExitTileNameHints = { "Dirt" };
         public bool clearEnemiesFromStartRoom = true;
         public bool clearImmediateHazardsNearEntrance = true;
@@ -105,7 +107,8 @@ namespace Spelunky {
         public string GetDebugSummary() {
             int trapRoomCount = GetSpecialRoomPool(SpecialRoomType.Trap)?.Length ?? 0;
             int sacrificeRoomCount = GetSpecialRoomPool(SpecialRoomType.Sacrifice)?.Length ?? 0;
-            return $"Stage {stageNumber}: {displayName} | Grid {roomGridWidth}x{roomGridHeight} | Path {mainPathStyle}/{mainPathDownChance:0.00} | Safe {entranceSafetyRadiusTiles}t | Normal {GetRoomCount(normalRooms)} | Trap {trapRoomCount}x{maxTrapRooms} | Sacrifice {sacrificeRoomCount}x{maxSacrificeRooms}";
+            int finalAltarRoomCount = GetSpecialRoomPool(SpecialRoomType.FinalAltar)?.Length ?? 0;
+            return $"Stage {stageNumber}: {displayName} | Grid {roomGridWidth}x{roomGridHeight} | Path {mainPathStyle}/{mainPathDownChance:0.00} | RouteHints {GetHintCount(mainPathPreferredRoomNameHints)} | Safe {entranceSafetyRadiusTiles}t | Normal {GetRoomCount(normalRooms)} | Trap {trapRoomCount}x{maxTrapRooms} | Sacrifice {sacrificeRoomCount}x{maxSacrificeRooms} | FinalAltar {finalAltarRoomCount}";
         }
 
         public Room[] GetSpecialRoomPool(SpecialRoomType roomType) {
@@ -126,6 +129,10 @@ namespace Spelunky {
 
         private static int GetRoomCount(Room[] roomPool) {
             return roomPool != null ? roomPool.Length : 0;
+        }
+
+        private static int GetHintCount(string[] hints) {
+            return hints != null ? hints.Length : 0;
         }
     }
 

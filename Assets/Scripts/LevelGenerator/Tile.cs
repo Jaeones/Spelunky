@@ -10,6 +10,8 @@ namespace Spelunky {
 
         [Tooltip("The probably for this tile to spawn. Setting this to 25 means the tile is 75% likely to be removed when the level is generated.")]
         [Range(0, 100)] public int spawnProbability = 100;
+        [Tooltip("When false, explosions will not remove this tile.")]
+        public bool canBeDestroyedByExplosion = true;
 
         public int x { get; private set; }
         public int y { get; private set; }

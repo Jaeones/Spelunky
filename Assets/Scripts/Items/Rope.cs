@@ -24,6 +24,8 @@ namespace Spelunky {
         private Vector2 _originalPos;
         private bool _placed;
         private AudioSource _audioSource;
+        private BoxCollider2D _airborneTriggerCollider;
+        private int _originalLayer;
 
         // Extension state (replaces coroutine)
         private bool _isExtending;
@@ -36,6 +38,17 @@ namespace Spelunky {
 
         private void Awake() {
             _audioSource = GetComponent<AudioSource>();
+            _originalLayer = gameObject.layer;
+            _airborneTriggerCollider = GetComponent<BoxCollider2D>();
+            if (_airborneTriggerCollider == null) {
+                _airborneTriggerCollider = gameObject.AddComponent<BoxCollider2D>();
+            }
+
+            _airborneTriggerCollider.isTrigger = true;
+            _airborneTriggerCollider.size = new Vector2(Tile.Width, Tile.Height);
+            _airborneTriggerCollider.offset = Vector2.zero;
+            SetAirborneTrapTriggerActive(false);
+
             ropeMiddle.gameObject.SetActive(false);
         }
 
@@ -108,6 +121,7 @@ namespace Spelunky {
             _newPos = transform.position;
             _oldPos = _newPos;
             _originalPos = _newPos;
+            SetAirborneTrapTriggerActive(true);
 
             ropeEnd.transform.position += Vector3.down * Mathf.RoundToInt(Tile.Width / 2f);
 
@@ -117,6 +131,7 @@ namespace Spelunky {
 
         private void PlaceRope(Vector3 position) {
             _placed = true;
+            SetAirborneTrapTriggerActive(false);
             transform.position = Tile.GetPositionOfCenterOfNearestTile(position);
 
             BeginExtension();
@@ -155,6 +170,20 @@ namespace Spelunky {
             ropeMiddle.GetComponent<BoxCollider2D>().size = new Vector2(ropeMiddle.GetComponent<BoxCollider2D>().size.x, ropeMiddle.size.y);
             ropeMiddle.GetComponent<BoxCollider2D>().offset = new Vector2(ropeMiddle.GetComponent<BoxCollider2D>().offset.x, -1 * ropeMiddle.size.y / 2f);
             ropeEnd.gameObject.SetActive(false);
+        }
+
+        private void SetAirborneTrapTriggerActive(bool isActive) {
+            if (_airborneTriggerCollider == null) {
+                return;
+            }
+
+            _airborneTriggerCollider.enabled = isActive;
+            gameObject.layer = isActive ? GetAirborneTriggerLayer() : _originalLayer;
+        }
+
+        private int GetAirborneTriggerLayer() {
+            int pickupsLayer = LayerMask.NameToLayer("Pickups");
+            return pickupsLayer >= 0 ? pickupsLayer : _originalLayer;
         }
 
     }

@@ -7,7 +7,7 @@ namespace Spelunky {
         Rope
     }
 
-    public class InventoryPickup : MonoBehaviour {
+    public class InventoryPickup : PhysicsBody {
 
         public InventoryItemType itemType;
         public int amount = 4;

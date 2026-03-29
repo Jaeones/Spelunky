@@ -95,6 +95,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   spawnProbability: 100
+  canBeDestroyedByExplosion: 0
   hasDecorations: 0
   decorationUp: []
   decorationRight: []

@@ -1,0 +1,53 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4f2d54c6d3a74607a8b9f0c1d2e3f4a5, type: 3}
+  m_Name: RuntimeRoomContentCatalog
+  m_EditorClassIdentifier: 
+  keyPrefab: {fileID: 3938956901620797874, guid: debaa41b46efa8f4f96fa3d4a3c60fdf, type: 3}
+  chestPrefab: {fileID: 8345234771229977303, guid: 7439d2a031462e946956ec0fcb76253e, type: 3}
+  cratePrefab: {fileID: 8345234771229977303, guid: 325c315d14db9d14d8215158cfe7f6c3, type: 3}
+  jarPrefab: {fileID: 8345234771229977303, guid: 00a1502ab6db6564f84b03a92ad04f22, type: 3}
+  accessoryPrefabs:
+  - {fileID: 8345234771229977303, guid: 7a0b0734092855440a3886c4d04bc142, type: 3}
+  - {fileID: 8345234771229977303, guid: 81e11e4a91c7780458c493701424561a, type: 3}
+  - {fileID: 8345234771229977303, guid: e0d7f90dd270f6940a8b256bdb25f6ed, type: 3}
+  - {fileID: 8345234771229977303, guid: 191ec9d263163e742bb0632c4cd46239, type: 3}
+  equipmentPrefabs:
+  - {fileID: 4295833751344724974, guid: f9a8d74ae1885a64eba7a84be89653d3, type: 3}
+  throwablePrefabs:
+  - {fileID: 3938956901620797874, guid: c46994d3a3ce7e243b40e4a09fed04c4, type: 3}
+  - {fileID: 3938956901620797874, guid: b2e0c73cdf91957478ae0502367510f1, type: 3}
+  - {fileID: 8345234771229977303, guid: 7439d2a031462e946956ec0fcb76253e, type: 3}
+  treasurePrefabs:
+  - {fileID: 8345234771229977303, guid: 2b85e734459cf9e44ae1aed1d38c07a8, type: 3}
+  - {fileID: 8345234771229977303, guid: b00cec14402ecb84d8e02754dbca7d68, type: 3}
+  - {fileID: 8345234771229977303, guid: 60b261dc4914ece4684d1297d7a9c62f, type: 3}
+  - {fileID: 8345234771229977303, guid: fa19fca8347e1ef419fdca200648074b, type: 3}
+  - {fileID: 8345234771229977303, guid: 33a164f764cba0541b00d63a105a70c2, type: 3}
+  - {fileID: 8345234771229977303, guid: bbec781736f67594abab7bccf34399d1, type: 3}
+  - {fileID: 8345234771229977303, guid: e6e9c0c17a9593143afdb00f60726f29, type: 3}
+  - {fileID: 8345234771229977303, guid: edd56cec1bcc4f24590c03eac0130c69, type: 3}
+  minKeyChestSetCount: 1
+  maxKeyChestSetCount: 3
+  minAccessorySpawnCount: 0
+  maxAccessorySpawnCount: 1
+  minEquipmentSpawnCount: 0
+  maxEquipmentSpawnCount: 1
+  minCrateSpawnCount: 2
+  maxCrateSpawnCount: 3
+  minJarSpawnCount: 2
+  maxJarSpawnCount: 3
+  minThrowableSpawnCount: 2
+  maxThrowableSpawnCount: 4
+  minTreasureSpawnCount: 2
+  maxTreasureSpawnCount: 4
+  minimumKeyChestPairDistance: 96

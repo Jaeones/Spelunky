@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Spelunky {
@@ -14,6 +15,9 @@ namespace Spelunky {
 
         [Tooltip("Accessories that can spawn when the chest is opened.")]
         public GameObject[] possibleAccessories;
+
+        [Tooltip("Fallback rewards when all permanent accessories are blocked.")]
+        public GameObject[] fallbackRewards;
 
         public AudioClip openSound;
 
@@ -76,15 +80,61 @@ namespace Spelunky {
 
         private void SpawnAccessory() {
             if (possibleAccessories == null || possibleAccessories.Length == 0) {
+                SpawnFallbackReward();
                 return;
             }
 
-            GameObject toSpawn = possibleAccessories[Random.Range(0, possibleAccessories.Length)];
+            List<GameObject> spawnableAccessories = BuildSpawnableAccessoryList();
+            if (spawnableAccessories.Count == 0) {
+                SpawnFallbackReward();
+                return;
+            }
+
+            GameObject toSpawn = spawnableAccessories[Random.Range(0, spawnableAccessories.Count)];
             if (toSpawn != null) {
+                AccessoryPickup accessoryPickup = toSpawn.GetComponent<AccessoryPickup>();
+                if (accessoryPickup != null && LevelGenerator.instance != null && !LevelGenerator.instance.TryRegisterPermanentAccessorySpawn(accessoryPickup.accessoryType)) {
+                    SpawnFallbackReward();
+                    return;
+                }
+
                 // Spawn slightly above the chest.
                 Vector3 spawnPos = transform.position + Vector3.up * 8f;
                 Instantiate(toSpawn, spawnPos, Quaternion.identity);
             }
+        }
+
+        private List<GameObject> BuildSpawnableAccessoryList() {
+            List<GameObject> spawnableAccessories = new List<GameObject>();
+            for (int i = 0; i < possibleAccessories.Length; i++) {
+                GameObject accessoryPrefab = possibleAccessories[i];
+                if (accessoryPrefab == null) {
+                    continue;
+                }
+
+                AccessoryPickup accessoryPickup = accessoryPrefab.GetComponent<AccessoryPickup>();
+                if (accessoryPickup != null && LevelGenerator.instance != null && !LevelGenerator.instance.CanSpawnPermanentAccessory(accessoryPickup.accessoryType)) {
+                    continue;
+                }
+
+                spawnableAccessories.Add(accessoryPrefab);
+            }
+
+            return spawnableAccessories;
+        }
+
+        private void SpawnFallbackReward() {
+            if (fallbackRewards == null || fallbackRewards.Length == 0) {
+                return;
+            }
+
+            GameObject fallbackReward = fallbackRewards[Random.Range(0, fallbackRewards.Length)];
+            if (fallbackReward == null) {
+                return;
+            }
+
+            Vector3 spawnPos = transform.position + Vector3.up * 8f;
+            Instantiate(fallbackReward, spawnPos, Quaternion.identity);
         }
 
     }

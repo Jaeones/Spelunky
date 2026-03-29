@@ -1358,7 +1358,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c3c0c212488c5244b992b2c2a6856634, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  defaultFont: {fileID: 12800000, guid: affab324318637e4ea4cdfc2eab325c2, type: 3}
+  defaultFont: {fileID: 12800000, guid: 41d3f39970cd3ff49b9815843d7fd1be, type: 3}
   overlayColor: {r: 0, g: 0, b: 0, a: 0.75}
   buttonColor: {r: 0.4433962, g: 0.43293875, b: 0.43293875, a: 0.95}
   buttonHighlightColor: {r: 0.5660378, g: 0.5660378, b: 0.5660378, a: 0.95}

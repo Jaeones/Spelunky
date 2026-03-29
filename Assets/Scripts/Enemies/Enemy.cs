@@ -25,6 +25,7 @@ namespace Spelunky {
 
         [Header("Target Detection")]
         public LayerMask targetDetectionMask;
+        public LayerMask occlusionMask;
         public float detectionRange = 128f;
         public Vector2Int detectionBox = new Vector2Int(128, 64);
         public Vector2Int detectionOffset = new Vector2Int(0, -32);
@@ -162,22 +163,28 @@ namespace Spelunky {
         /// Try to detect a target within range using a raycast in the specified direction.
         /// </summary>
         public Transform DetectTargetInDirection(Vector2 position, Vector2 direction) {
-            RaycastHit2D hit = Physics2D.Raycast(position, direction, detectionRange, targetDetectionMask);
+            int combinedMask = targetDetectionMask.value | ActiveOcclusionMask;
+            RaycastHit2D hit = Physics2D.Raycast(position, direction, detectionRange, combinedMask);
             if (showDebugVisuals) {
                 Debug.DrawRay(position, direction * detectionRange, Color.green);
             }
-            return hit.collider != null ? hit.transform : null;
+            if (hit.collider == null || !IsLayerInMask(hit.collider.gameObject.layer, targetDetectionMask)) {
+                return null;
+            }
+
+            return hit.transform;
         }
 
         /// <summary>
         /// Try to detect a target within a radius.
         /// </summary>
         public Transform DetectTargetInRadius(Vector2 position, float radius) {
-            Collider2D hit = Physics2D.OverlapCircle(position, radius, targetDetectionMask);
+            Collider2D[] hits = Physics2D.OverlapCircleAll(position, radius, targetDetectionMask);
             if (showDebugVisuals) {
                 Gizmos.Circle(position, radius, Camera.main, Color.green);
             }
-            return hit != null ? hit.transform : null;
+
+            return GetClosestVisibleTarget(position, hits);
         }
 
         /// <summary>
@@ -188,11 +195,45 @@ namespace Spelunky {
         /// <param name="angle">Rotation angle of the box in degrees.</param>
         /// <returns>The transform of the detected target, or null if none found.</returns>
         public Transform DetectTargetInBox(Vector2 position, Vector2 size, float angle = 0f) {
-            Collider2D hit = Physics2D.OverlapBox(position, size, angle, targetDetectionMask);
+            Collider2D[] hits = Physics2D.OverlapBoxAll(position, size, angle, targetDetectionMask);
             if (showDebugVisuals) {
                 Gizmos.Square(position, size, Color.green);
             }
-            return hit != null ? hit.transform : null;
+
+            return GetClosestVisibleTarget(position, hits);
+        }
+
+        private int ActiveOcclusionMask => occlusionMask.value != 0 ? occlusionMask.value : LayerMask.GetMask("Obstacle", "Block", "Indestructable");
+
+        private Transform GetClosestVisibleTarget(Vector2 origin, Collider2D[] hits) {
+            if (hits == null || hits.Length == 0) {
+                return null;
+            }
+
+            Transform closestTarget = null;
+            float closestSqrDistance = float.MaxValue;
+
+            foreach (Collider2D hit in hits) {
+                if (hit == null || IsOccluded(origin, hit.transform.position)) {
+                    continue;
+                }
+
+                float sqrDistance = ((Vector2)hit.transform.position - origin).sqrMagnitude;
+                if (sqrDistance < closestSqrDistance) {
+                    closestSqrDistance = sqrDistance;
+                    closestTarget = hit.transform;
+                }
+            }
+
+            return closestTarget;
+        }
+
+        private bool IsOccluded(Vector2 origin, Vector2 targetPosition) {
+            return Physics2D.Linecast(origin, targetPosition, ActiveOcclusionMask).collider != null;
+        }
+
+        private static bool IsLayerInMask(int layer, LayerMask mask) {
+            return (mask.value & (1 << layer)) != 0;
         }
         
         /// <summary>

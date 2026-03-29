@@ -18,6 +18,10 @@ namespace Spelunky {
 
             var player = other.GetComponentInParent<Player>();
             if (player != null) {
+                if (player.Accessories != null && player.Accessories.HasAccessory(accessoryType)) {
+                    return;
+                }
+
                 _isCollected = true;
                 Collider2D pickupCollider = GetComponent<Collider2D>();
                 if (pickupCollider != null) {

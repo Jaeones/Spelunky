@@ -10,6 +10,7 @@ namespace Spelunky {
         [SerializeField] private int fireDirection = -1;
         [SerializeField] private float rayDistance = 160f;
         [SerializeField] private LayerMask detectMask;
+        [SerializeField] private LayerMask occlusionMask;
         [SerializeField] private AudioClip fireSound;
 
         private bool _hasFired;
@@ -29,10 +30,33 @@ namespace Spelunky {
         public bool IsTickActive => !_hasFired;
 
         public void Tick() {
-            RaycastHit2D hit = Physics2D.Raycast(RayOrigin, RayDirection, rayDistance, detectMask);
-            if (hit.collider != null) {
+            int activeOcclusionMask = occlusionMask.value != 0 ? occlusionMask.value : GetDefaultOcclusionMask();
+            int combinedMask = detectMask.value | activeOcclusionMask;
+            RaycastHit2D hit = Physics2D.Raycast(RayOrigin, RayDirection, rayDistance, combinedMask);
+            if (hit.collider != null && ShouldTriggerFromHit(hit.collider)) {
                 Fire();
             }
+        }
+
+        private static int GetDefaultOcclusionMask() {
+            return LayerMask.GetMask("Obstacle", "Block", "Indestructable");
+        }
+
+        private bool ShouldTriggerFromHit(Collider2D hitCollider) {
+            if (hitCollider == null || !IsLayerInMask(hitCollider.gameObject.layer, detectMask)) {
+                return false;
+            }
+
+            int ladderLayer = LayerMask.NameToLayer("Ladder");
+            if (ladderLayer >= 0 && hitCollider.gameObject.layer == ladderLayer) {
+                return hitCollider.CompareTag("Rope") || hitCollider.GetComponentInParent<Rope>() != null;
+            }
+
+            return true;
+        }
+
+        private static bool IsLayerInMask(int layer, LayerMask mask) {
+            return (mask.value & (1 << layer)) != 0;
         }
 
         private void Fire() {

@@ -51,6 +51,18 @@ namespace Spelunky {
             GameManager.Instance?.HandlePlayerEnteredExit(player, this);
         }
 
+        public bool CanPlayerEnter(Player player) {
+            if (_hasHandledEntry) {
+                return false;
+            }
+
+            return GameManager.Instance == null || GameManager.Instance.CanPlayerEnterExit(player, this);
+        }
+
+        public void HandleLockedAttempt(Player player) {
+            GameManager.Instance?.HandleLockedExitAttempt(player, this);
+        }
+
     }
 
 }

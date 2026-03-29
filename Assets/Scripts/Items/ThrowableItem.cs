@@ -34,6 +34,15 @@ namespace Spelunky {
         public Vector2Int HoldOffset => _holdOffset;
         public bool FlipWithPlayer => _flipWithPlayer;
 
+        protected override void Awake() {
+            base.Awake();
+
+            if (Physics != null && Physics.overlapMask.value == 0) {
+                Physics.overlapMask = LayerMask.GetMask("Enemy");
+                Physics.RefreshContactFilters();
+            }
+        }
+
         protected virtual void Start() {
             // ThrowableItems should not stop on ground - they need to maintain
             // their throw arc and bounce like bombs do.

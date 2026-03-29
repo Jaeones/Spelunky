@@ -397,6 +397,9 @@ MonoBehaviour:
   targetDetectionMask:
     serializedVersion: 2
     m_Bits: 512
+  occlusionMask:
+    serializedVersion: 2
+    m_Bits: 0
   detectionRange: 128
   detectionBox: {x: 128, y: 64}
   detectionOffset: {x: 0, y: -32}

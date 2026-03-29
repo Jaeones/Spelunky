@@ -2047,6 +2047,10 @@ MonoBehaviour:
     type: 2}
   musicGroup: {fileID: -960826693257977033, guid: 99a019a9200e56241971455f837c2bb8,
     type: 2}
+  stage1Music: {fileID: 8300000, guid: 2bed6d38b133350408b930d67ff0401a, type: 3}
+  stage2Music: {fileID: 8300000, guid: 605dab54342056f4dbed057e8cc7ad20, type: 3}
+  stage3Music: {fileID: 8300000, guid: 728a594c6c6ff304884bddb794b5ffe1, type: 3}
+  stage4Music: {fileID: 8300000, guid: 275e330bd86c297498ca23bba8f7dd42, type: 3}
 --- !u!4 &1959517403
 Transform:
   m_ObjectHideFlags: 0
@@ -2091,7 +2095,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c3c0c212488c5244b992b2c2a6856634, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  defaultFont: {fileID: 12800000, guid: affab324318637e4ea4cdfc2eab325c2, type: 3}
+  defaultFont: {fileID: 12800000, guid: 41d3f39970cd3ff49b9815843d7fd1be, type: 3}
   overlayColor: {r: 0, g: 0, b: 0, a: 0.75}
   buttonColor: {r: 0.4433962, g: 0.43293875, b: 0.43293875, a: 0.95}
   buttonHighlightColor: {r: 0.5660378, g: 0.5660378, b: 0.5660378, a: 0.95}

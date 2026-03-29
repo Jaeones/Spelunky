@@ -34,7 +34,7 @@ namespace Spelunky {
             float safeRadius = Mathf.Max(0.01f, explosionRadius);
 
             foreach (Collider2D collider in colliders) {
-                if (collider.TryGetComponent(out Tile tile)) {
+                if (collider.TryGetComponent(out Tile tile) && tile.canBeDestroyedByExplosion) {
                     tilesToRemove.Add(tile);
                 }
 

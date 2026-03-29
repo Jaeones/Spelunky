@@ -22,9 +22,10 @@ MonoBehaviour:
   mainPathStyle: 0
   mainPathDownChance: 0.2
   trapRoomChance: 0.1
-  sacrificeRoomChance: 0.1
+  sacrificeRoomChance: 0
   maxTrapRooms: 1
-  maxSacrificeRooms: 1
+  maxSacrificeRooms: 0
+  mainPathPreferredRoomNameHints: []
   entranceExitTileNameHints:
   - Dirt
   clearEnemiesFromStartRoom: 1
@@ -39,16 +40,7 @@ MonoBehaviour:
   - {fileID: 6398162121198865019, guid: 535620be7e5fb134bbfd353c4fadd3df, type: 3}
   - {fileID: 6398162121198865019, guid: 67b88abbc2e08eb47842b00bdfc3551d, type: 3}
   - {fileID: 6398162121198865019, guid: 3822a0c71d73b864099b611dfe1e976b, type: 3}
-  - {fileID: 1143297328923257882, guid: 0d15c6c78a544973a8c1d5b8914d0a11, type: 3}
-  - {fileID: 1143297328923257882, guid: 1a4b8f5c9e3d4a7fb261c0d48e12f6ab, type: 3}
-  - {fileID: 1143297328923257882, guid: bc567812239a466ee1f2345678901234, type: 3}
-  specialRoomPools:
-  - roomType: 0
-    rooms:
-    - {fileID: 6398162121198865019, guid: 73171b8aad92e084fb44c2d77eccb58b, type: 3}
-  - roomType: 1
-    rooms:
-    - {fileID: 6398162121198865019, guid: 3b4ca8af042360c449327da3e235e2fa, type: 3}
+  specialRoomPools: []
   allowLegacyNormalRoomFallback: 0
   allowLegacySpecialRoomFallback: 0
   musicTrack: {fileID: 0}

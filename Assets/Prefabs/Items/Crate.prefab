@@ -216,5 +216,7 @@ MonoBehaviour:
   - {fileID: 4652397314886745046, guid: fa19fca8347e1ef419fdca200648074b, type: 3}
   - {fileID: 9053397022837719003, guid: bbec781736f67594abab7bccf34399d1, type: 3}
   - {fileID: 8281728279517059859, guid: e6e9c0c17a9593143afdb00f60726f29, type: 3}
+  - {fileID: 8345234771229977303, guid: 48d2aaf496cc59947813edec62a26199, type: 3}
+  - {fileID: 8345234771229977303, guid: 3dd5a83e7a645714c9274860370d8def, type: 3}
   spawnChance: 1
   breakSound: {fileID: 8300000, guid: d85a968d14bbfe2469b8441a080f6b5f, type: 3}

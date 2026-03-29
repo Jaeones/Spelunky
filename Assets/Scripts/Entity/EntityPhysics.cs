@@ -163,6 +163,10 @@ namespace Spelunky {
             _overlapFilter.layerMask = overlapMask;
         }
 
+        public void RefreshContactFilters() {
+            SetupContactFilters();
+        }
+
         private void InitializePixelPosition() {
             if (_positionInitialized) {
                 return;

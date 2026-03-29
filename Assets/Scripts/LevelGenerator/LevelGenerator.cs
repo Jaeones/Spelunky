@@ -7,6 +7,7 @@ namespace Spelunky {
 
     public enum RoomPoolSource {
         Missing,
+        Resources,
         StageDefinition,
         LegacyFallback
     }
@@ -28,6 +29,7 @@ namespace Spelunky {
 
         private const int LegacyTrapRoomIndex = 0;
         private const int LegacySacrificeRoomIndex = 1;
+        private const string RuntimeRoomContentCatalogResourcePath = "Configs/RuntimeRoomContentCatalog";
         private static readonly string[] ImmediateHazardNameHints = {
             "ArrowTrap",
             "Spikes",
@@ -81,6 +83,9 @@ namespace Spelunky {
 
         private Dictionary<string, Tile> _tilePrefabs;
         private Dictionary<string, GameObject> _backgroundPrefabs;
+        private Room[] _resourceNormalRooms;
+        private readonly Dictionary<SpecialRoomType, Room[]> _resourceSpecialRoomPools = new Dictionary<SpecialRoomType, Room[]>();
+        private RuntimeRoomContentCatalog _runtimeRoomContentCatalog;
 
         private Transform _boundsParent;
         private Transform _backgroundParent;
@@ -97,6 +102,7 @@ namespace Spelunky {
 
         private int _spawnedTrapRoomCount;
         private int _spawnedSacrificalAltarCount;
+        private int _spawnedFinalAltarRoomCount;
 
         private StageDefinition _runtimeStageOverride;
         private StageDefinition _activeStageDefinition;
@@ -155,6 +161,9 @@ namespace Spelunky {
                 _backgroundPrefabs.Add(background.name, background);
             }
 
+            _runtimeRoomContentCatalog = Resources.Load<RuntimeRoomContentCatalog>(RuntimeRoomContentCatalogResourcePath);
+            LoadResourceRoomPools();
+
             _boundsParent = GameObject.Find("_BOUNDS").GetComponent<Transform>();
             _backgroundParent = GameObject.Find("_BACKGROUND").GetComponent<Transform>();
             _roomParent = GameObject.Find("_ROOMS").GetComponent<Transform>();
@@ -169,6 +178,7 @@ namespace Spelunky {
                 currentStageIndex = 0;
             }
 
+            LoadResourceRoomPools();
             ValidateStageDefinitions();
         }
 
@@ -226,6 +236,7 @@ namespace Spelunky {
             TrackGeneratedObject(exit.gameObject);
 
             ApplyEntranceSafetyRules();
+            SpawnRuntimeRoomContents();
             SanitizePermanentAccessoryPickupsInScene();
         }
 
@@ -280,6 +291,7 @@ namespace Spelunky {
             lastRoom = null;
             _spawnedTrapRoomCount = 0;
             _spawnedSacrificalAltarCount = 0;
+            _spawnedFinalAltarRoomCount = 0;
             _direction = Vector2.zero;
             _lastDirection = Vector2.zero;
 
@@ -316,7 +328,7 @@ namespace Spelunky {
         /// <summary>
         /// </summary>
         private void CreateMainPathRooms() {
-            Vector2 currentIndex = new Vector2(Random.Range(0, Rooms.GetLength(0)), Rooms.GetLength(1) - 1);
+            Vector2 currentIndex = new Vector2(GetStartingMainPathColumn(), Rooms.GetLength(1) - 1);
             PickRandomDirection();
 
             firstRoom = null;
@@ -340,7 +352,7 @@ namespace Spelunky {
                     Room roomToSpawn = FindSuitableRoom(currentIndex);
                     if (roomToSpawn == null) {
                         Debug.LogError("No suitable main path room found. Trying to find any room instead.");
-                        roomToSpawn = FindAnyRoom();
+                        roomToSpawn = FindAnyRoom(true);
                     }
 
                     if (roomToSpawn == null) {
@@ -368,7 +380,7 @@ namespace Spelunky {
                     Room roomToSpawn = FindSuitableRoom(currentIndex);
                     if (roomToSpawn == null) {
                         Debug.LogError("No suitable main path room found. Trying to find any room instead.");
-                        roomToSpawn = FindAnyRoom();
+                        roomToSpawn = FindAnyRoom(true);
                     }
 
                     if (roomToSpawn == null) {
@@ -395,6 +407,8 @@ namespace Spelunky {
         /// <summary>
         /// </summary>
         private void CreateRemainingRooms() {
+            TrySpawnGuaranteedFinalAltarRoom();
+
             for (int x = 0; x < Rooms.GetLength(0); x++) {
                 for (int y = 0; y < Rooms.GetLength(1); y++) {
                     Vector2 currentIndex = new Vector2(x, y);
@@ -446,6 +460,27 @@ namespace Spelunky {
         private void PickRandomDirection() {
             _lastDirection = _direction;
             PickRandomDirection(GetMainPathDownChance());
+        }
+
+        private int GetStartingMainPathColumn() {
+            int roomWidth = Rooms != null ? Rooms.GetLength(0) : ActiveRoomsHorizontal;
+            if (roomWidth <= 1) {
+                return 0;
+            }
+
+            int centerColumn = roomWidth / 2;
+            if (GetMainPathStyle() == StageMainPathStyle.VerticalDescent) {
+                int minColumn = Mathf.Max(0, centerColumn - 1);
+                int maxColumn = Mathf.Min(roomWidth - 1, centerColumn);
+                return Random.Range(minColumn, maxColumn + 1);
+            }
+
+            if (roomWidth <= 2) {
+                return Random.Range(0, roomWidth);
+            }
+
+            // Classic routes read more clearly when they enter from an outer lane and sweep across.
+            return Random.value < 0.5f ? 0 : roomWidth - 1;
         }
 
         /// <summary>
@@ -507,14 +542,19 @@ namespace Spelunky {
                 suitableRooms.Add(room);
             }
 
-            return suitableRooms.Count > 0 ? suitableRooms[Random.Range(0, suitableRooms.Count)] : null;
+            return PickPreferredMainPathRoom(suitableRooms);
         }
 
         /// <summary>
         /// </summary>
         /// <returns></returns>
-        private Room FindAnyRoom() {
-            return GetRandomRoom(_activeNormalRooms);
+        private Room FindAnyRoom(bool preferMainPathRooms = false) {
+            if (!preferMainPathRooms || !HasRooms(_activeNormalRooms)) {
+                return GetRandomRoom(_activeNormalRooms);
+            }
+
+            List<Room> candidateRooms = new List<Room>(_activeNormalRooms);
+            return PickPreferredMainPathRoom(candidateRooms);
         }
 
         private void RefreshStageConfiguration() {
@@ -528,11 +568,14 @@ namespace Spelunky {
             _activeSpecialRoomSources.Clear();
             _activeSpecialRoomPools[SpecialRoomType.Trap] = ResolveSpecialRooms(_activeStageDefinition, SpecialRoomType.Trap, out RoomPoolSource trapSource);
             _activeSpecialRoomPools[SpecialRoomType.Sacrifice] = ResolveSpecialRooms(_activeStageDefinition, SpecialRoomType.Sacrifice, out RoomPoolSource sacrificeSource);
+            _activeSpecialRoomPools[SpecialRoomType.FinalAltar] = ResolveSpecialRooms(_activeStageDefinition, SpecialRoomType.FinalAltar, out RoomPoolSource finalAltarSource);
             _activeSpecialRoomSources[SpecialRoomType.Trap] = trapSource;
             _activeSpecialRoomSources[SpecialRoomType.Sacrifice] = sacrificeSource;
+            _activeSpecialRoomSources[SpecialRoomType.FinalAltar] = finalAltarSource;
 
             _spawnedTrapRoomCount = 0;
             _spawnedSacrificalAltarCount = 0;
+            _spawnedFinalAltarRoomCount = 0;
             _direction = Vector2.zero;
             _lastDirection = Vector2.zero;
             activeStageConfigurationSummary = BuildActiveStageConfigurationSummary();
@@ -579,6 +622,11 @@ namespace Spelunky {
         }
 
         private Room[] ResolveNormalRooms(StageDefinition stageDefinition, out RoomPoolSource roomPoolSource) {
+            if (HasRooms(_resourceNormalRooms)) {
+                roomPoolSource = RoomPoolSource.Resources;
+                return _resourceNormalRooms;
+            }
+
             if (stageDefinition != null && HasRooms(stageDefinition.normalRooms)) {
                 roomPoolSource = RoomPoolSource.StageDefinition;
                 return stageDefinition.normalRooms;
@@ -595,6 +643,11 @@ namespace Spelunky {
         }
 
         private Room[] ResolveSpecialRooms(StageDefinition stageDefinition, SpecialRoomType specialRoomType, out RoomPoolSource roomPoolSource) {
+            if (_resourceSpecialRoomPools.TryGetValue(specialRoomType, out Room[] resourceRooms)) {
+                roomPoolSource = RoomPoolSource.Resources;
+                return resourceRooms;
+            }
+
             if (stageDefinition != null) {
                 Room[] stageSpecificRooms = stageDefinition.GetSpecialRoomPool(specialRoomType);
                 if (HasRooms(stageSpecificRooms)) {
@@ -663,6 +716,16 @@ namespace Spelunky {
             return _activeStageDefinition != null ? _activeStageDefinition.mainPathStyle : StageMainPathStyle.Classic;
         }
 
+        private string[] GetMainPathPreferredRoomNameHints() {
+            if (_activeStageDefinition != null &&
+                _activeStageDefinition.mainPathPreferredRoomNameHints != null &&
+                _activeStageDefinition.mainPathPreferredRoomNameHints.Length > 0) {
+                return _activeStageDefinition.mainPathPreferredRoomNameHints;
+            }
+
+            return Array.Empty<string>();
+        }
+
         private int ResolveRequestedStageNumber() {
             if (syncStageNumberFromRunManager && RunManager.Instance != null && RunManager.Instance.CurrentRun != null) {
                 return Mathf.Max(1, RunManager.Instance.CurrentRun.currentStageIndex);
@@ -720,6 +783,8 @@ namespace Spelunky {
                 return;
             }
 
+            bool usingResourceRoomPools = HasRooms(_resourceNormalRooms);
+
             Dictionary<int, StageDefinition> seenStageNumbers = new Dictionary<int, StageDefinition>();
             Dictionary<string, StageDefinition> seenStageIds = new Dictionary<string, StageDefinition>(StringComparer.OrdinalIgnoreCase);
             int highestStageNumber = 0;
@@ -752,16 +817,32 @@ namespace Spelunky {
                     seenStageIds.Add(stageDefinition.stageId, stageDefinition);
                 }
 
-                if (!stageDefinition.HasNormalRooms() && !stageDefinition.allowLegacyNormalRoomFallback) {
+                if (!usingResourceRoomPools && !stageDefinition.HasNormalRooms() && !stageDefinition.allowLegacyNormalRoomFallback) {
                     Debug.LogWarning($"LevelGenerator: Stage {stageDefinition.stageNumber} has no normal rooms and legacy fallback is disabled.");
                 }
 
-                if (!stageDefinition.HasSpecialRoomPool(SpecialRoomType.Trap) && !stageDefinition.allowLegacySpecialRoomFallback) {
+                if (!usingResourceRoomPools &&
+                    stageDefinition.HasNormalRooms() &&
+                    stageDefinition.mainPathPreferredRoomNameHints != null &&
+                    stageDefinition.mainPathPreferredRoomNameHints.Length > 0 &&
+                    CountRoomsMatchingHints(stageDefinition.normalRooms, stageDefinition.mainPathPreferredRoomNameHints) == 0) {
+                    Debug.LogWarning($"LevelGenerator: Stage {stageDefinition.stageNumber} main-path room hints do not match any configured normal rooms.");
+                }
+
+                if (!usingResourceRoomPools && !stageDefinition.HasSpecialRoomPool(SpecialRoomType.Trap) && !stageDefinition.allowLegacySpecialRoomFallback) {
                     Debug.LogWarning($"LevelGenerator: Stage {stageDefinition.stageNumber} has no trap room pool and legacy fallback is disabled.");
                 }
 
-                if (!stageDefinition.HasSpecialRoomPool(SpecialRoomType.Sacrifice) && !stageDefinition.allowLegacySpecialRoomFallback) {
+                if (!usingResourceRoomPools && !stageDefinition.HasSpecialRoomPool(SpecialRoomType.Sacrifice) && !stageDefinition.allowLegacySpecialRoomFallback) {
                     Debug.LogWarning($"LevelGenerator: Stage {stageDefinition.stageNumber} has no sacrifice room pool and legacy fallback is disabled.");
+                }
+
+                if (!usingResourceRoomPools && stageDefinition.isFinalStage && !stageDefinition.HasSpecialRoomPool(SpecialRoomType.FinalAltar)) {
+                    Debug.LogWarning($"LevelGenerator: Final stage {stageDefinition.stageNumber} is missing a FinalAltar room pool.");
+                }
+
+                if (!usingResourceRoomPools && !stageDefinition.isFinalStage && stageDefinition.HasSpecialRoomPool(SpecialRoomType.FinalAltar)) {
+                    Debug.LogWarning($"LevelGenerator: Non-final stage {stageDefinition.stageNumber} should not define a FinalAltar room pool.");
                 }
             }
 
@@ -787,9 +868,11 @@ namespace Spelunky {
             string normalSummary = $"Normal: {GetRoomCount(_activeNormalRooms)} ({_activeNormalRoomSource})";
             string trapSummary = $"Trap: {GetRoomCount(_activeSpecialRoomPools.TryGetValue(SpecialRoomType.Trap, out Room[] trapRooms) ? trapRooms : null)} ({GetRoomPoolSourceLabel(SpecialRoomType.Trap)}) limit {GetTrapRoomLimit()}";
             string sacrificeSummary = $"Sacrifice: {GetRoomCount(_activeSpecialRoomPools.TryGetValue(SpecialRoomType.Sacrifice, out Room[] sacrificeRooms) ? sacrificeRooms : null)} ({GetRoomPoolSourceLabel(SpecialRoomType.Sacrifice)}) limit {GetSacrificeRoomLimit()}";
+            string finalAltarSummary = $"Final Altar: {GetRoomCount(_activeSpecialRoomPools.TryGetValue(SpecialRoomType.FinalAltar, out Room[] finalAltarRooms) ? finalAltarRooms : null)} ({GetRoomPoolSourceLabel(SpecialRoomType.FinalAltar)}) guaranteed {ShouldGuaranteeFinalAltarRoom()}";
+            string mainPathRoomSummary = $"Main Path Rooms: {CountRoomsMatchingHints(_activeNormalRooms, GetMainPathPreferredRoomNameHints())}/{GetRoomCount(_activeNormalRooms)} preferred via [{string.Join(", ", GetMainPathPreferredRoomNameHints())}]";
             string entranceExitSummary = $"Door Tile Hints: {string.Join(", ", GetEntranceExitTileNameHints())}";
             string safetySummary = $"Entrance Safety: radius {GetEntranceSafetyRadiusTiles()} tiles | clear enemies {ShouldClearEnemiesFromStartRoom()} | clear hazards {ShouldClearImmediateHazardsNearEntrance()}";
-            return $"{requestSummary}\n{mappingSummary}\n{gridSummary}\n{stageLabel}\n{normalSummary}\n{trapSummary}\n{sacrificeSummary}\n{entranceExitSummary}\n{safetySummary}";
+            return $"{requestSummary}\n{mappingSummary}\n{gridSummary}\n{stageLabel}\n{normalSummary}\n{mainPathRoomSummary}\n{trapSummary}\n{sacrificeSummary}\n{finalAltarSummary}\n{entranceExitSummary}\n{safetySummary}";
         }
 
         private bool TryGetEntranceExitSpawnTile(Room room, string markerLabel, out Tile spawnTile) {
@@ -934,6 +1017,324 @@ namespace Spelunky {
             }
         }
 
+        private void SpawnRuntimeRoomContents() {
+            if (_runtimeRoomContentCatalog == null) {
+                return;
+            }
+
+            List<Tile> candidateTiles = GetRuntimeContentSpawnCandidates();
+            if (candidateTiles.Count == 0) {
+                return;
+            }
+
+            HashSet<Tile> usedTiles = new HashSet<Tile>();
+            HashSet<string> spawnedEquipmentPrefabs = new HashSet<string>(StringComparer.Ordinal);
+
+            SpawnKeyChestSets(candidateTiles, usedTiles);
+            SpawnTreasurePickups(candidateTiles, usedTiles);
+            SpawnDedicatedThrowablePickups(candidateTiles, usedTiles);
+            SpawnThrowablePickups(candidateTiles, usedTiles);
+            SpawnAccessoryPickups(candidateTiles, usedTiles);
+            SpawnEquipmentPickups(candidateTiles, usedTiles, spawnedEquipmentPrefabs);
+        }
+
+        private List<Tile> GetRuntimeContentSpawnCandidates() {
+            List<Tile> candidates = new List<Tile>();
+            if (Tiles == null) {
+                return candidates;
+            }
+
+            for (int x = 0; x < Tiles.GetLength(0); x++) {
+                for (int y = 0; y < Tiles.GetLength(1); y++) {
+                    Tile tile = Tiles[x, y];
+                    if (!IsRuntimeContentSpawnTile(tile)) {
+                        continue;
+                    }
+
+                    candidates.Add(tile);
+                }
+            }
+
+            for (int i = candidates.Count - 1; i > 0; i--) {
+                int swapIndex = Random.Range(0, i + 1);
+                Tile temp = candidates[i];
+                candidates[i] = candidates[swapIndex];
+                candidates[swapIndex] = temp;
+            }
+
+            return candidates;
+        }
+
+        private bool IsRuntimeContentSpawnTile(Tile tile) {
+            if (tile == null) {
+                return false;
+            }
+
+            Room room = GetRoomContainingTile(tile);
+            if (!IsRuntimeContentRoom(room)) {
+                return false;
+            }
+
+            if (!HasOpenSpawnSpaceAboveTile(tile)) {
+                return false;
+            }
+
+            Vector3 spawnPosition = GetRuntimeSpawnPosition(tile);
+            if (entrance != null && Vector2.Distance(spawnPosition, entrance.transform.position) <= GetEntranceSafetyRadiusWorld() + Tile.Width) {
+                return false;
+            }
+
+            if (exit != null && Vector2.Distance(spawnPosition, exit.transform.position) <= Tile.Width * 2f) {
+                return false;
+            }
+
+            return !IsRuntimeSpawnBlocked(spawnPosition);
+        }
+
+        private Room GetRoomContainingTile(Tile tile) {
+            if (tile == null || Rooms == null) {
+                return null;
+            }
+
+            int roomX = tile.x / RoomWidth;
+            int roomY = tile.y / RoomHeight;
+            if (roomX < 0 || roomX >= Rooms.GetLength(0) || roomY < 0 || roomY >= Rooms.GetLength(1)) {
+                return null;
+            }
+
+            return Rooms[roomX, roomY];
+        }
+
+        private bool IsRuntimeContentRoom(Room room) {
+            if (room == null || room == firstRoom || room == lastRoom) {
+                return false;
+            }
+
+            foreach (Transform child in room.GetComponentsInChildren<Transform>(true)) {
+                if (child == null) {
+                    continue;
+                }
+
+                if (child.name.IndexOf("GoldIdol", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    child.name.IndexOf("Altar", StringComparison.OrdinalIgnoreCase) >= 0) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool HasOpenSpawnSpaceAboveTile(Tile tile) {
+            if (tile == null || Tiles == null) {
+                return false;
+            }
+
+            if (tile.CompareTag("Ladder") || tile.CompareTag("OneWayPlatform") || tile.CompareTag("Block")) {
+                return false;
+            }
+
+            int yPositionToCheck = tile.y + 1;
+            if (yPositionToCheck >= Tiles.GetLength(1)) {
+                return false;
+            }
+
+            return Tiles[tile.x, yPositionToCheck] == null;
+        }
+
+        private static Vector3 GetRuntimeSpawnPosition(Tile tile) {
+            return tile.transform.position + new Vector3(Tile.Width * 0.5f, Tile.Height, 0f);
+        }
+
+        private static bool IsRuntimeSpawnBlocked(Vector3 spawnPosition) {
+            Collider2D[] overlaps = Physics2D.OverlapCircleAll(spawnPosition, 4f);
+            for (int i = 0; i < overlaps.Length; i++) {
+                Collider2D overlap = overlaps[i];
+                if (overlap == null) {
+                    continue;
+                }
+
+                if (overlap.GetComponent<Tile>() != null || overlap.GetComponentInParent<Tile>() != null) {
+                    continue;
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private void SpawnKeyChestSets(List<Tile> candidateTiles, HashSet<Tile> usedTiles) {
+            if (_runtimeRoomContentCatalog.keyPrefab == null || _runtimeRoomContentCatalog.chestPrefab == null) {
+                return;
+            }
+
+            int requestedSetCount = GetRandomCount(_runtimeRoomContentCatalog.minKeyChestSetCount, _runtimeRoomContentCatalog.maxKeyChestSetCount);
+            for (int i = 0; i < requestedSetCount; i++) {
+                Tile keyTile = FindAvailableSpawnTile(candidateTiles, usedTiles, null);
+                if (keyTile == null) {
+                    return;
+                }
+
+                Tile chestTile = FindAvailableSpawnTile(
+                    candidateTiles,
+                    usedTiles,
+                    candidate => candidate != keyTile && Vector3.Distance(GetRuntimeSpawnPosition(keyTile), GetRuntimeSpawnPosition(candidate)) >= _runtimeRoomContentCatalog.minimumKeyChestPairDistance
+                );
+
+                if (chestTile == null) {
+                    return;
+                }
+
+                SpawnTrackedPrefab(_runtimeRoomContentCatalog.keyPrefab, keyTile, usedTiles);
+                SpawnTrackedPrefab(_runtimeRoomContentCatalog.chestPrefab, chestTile, usedTiles);
+            }
+        }
+
+        private void SpawnTreasurePickups(List<Tile> candidateTiles, HashSet<Tile> usedTiles) {
+            SpawnFromCatalogPool(_runtimeRoomContentCatalog.treasurePrefabs, _runtimeRoomContentCatalog.minTreasureSpawnCount, _runtimeRoomContentCatalog.maxTreasureSpawnCount, candidateTiles, usedTiles);
+        }
+
+        private void SpawnDedicatedThrowablePickups(List<Tile> candidateTiles, HashSet<Tile> usedTiles) {
+            SpawnSpecificPrefab(_runtimeRoomContentCatalog.cratePrefab, _runtimeRoomContentCatalog.minCrateSpawnCount, _runtimeRoomContentCatalog.maxCrateSpawnCount, candidateTiles, usedTiles);
+            SpawnSpecificPrefab(_runtimeRoomContentCatalog.jarPrefab, _runtimeRoomContentCatalog.minJarSpawnCount, _runtimeRoomContentCatalog.maxJarSpawnCount, candidateTiles, usedTiles);
+        }
+
+        private void SpawnThrowablePickups(List<Tile> candidateTiles, HashSet<Tile> usedTiles) {
+            SpawnFromCatalogPool(_runtimeRoomContentCatalog.throwablePrefabs, _runtimeRoomContentCatalog.minThrowableSpawnCount, _runtimeRoomContentCatalog.maxThrowableSpawnCount, candidateTiles, usedTiles);
+        }
+
+        private void SpawnAccessoryPickups(List<Tile> candidateTiles, HashSet<Tile> usedTiles) {
+            if (_runtimeRoomContentCatalog.accessoryPrefabs == null || _runtimeRoomContentCatalog.accessoryPrefabs.Length == 0) {
+                return;
+            }
+
+            int spawnCount = GetRandomCount(_runtimeRoomContentCatalog.minAccessorySpawnCount, _runtimeRoomContentCatalog.maxAccessorySpawnCount);
+            List<GameObject> candidates = new List<GameObject>(_runtimeRoomContentCatalog.accessoryPrefabs);
+            for (int i = 0; i < spawnCount && candidates.Count > 0; i++) {
+                GameObject prefab = candidates[Random.Range(0, candidates.Count)];
+                candidates.Remove(prefab);
+                if (!TrySpawnAccessoryPrefab(prefab, candidateTiles, usedTiles)) {
+                    continue;
+                }
+            }
+        }
+
+        private void SpawnEquipmentPickups(List<Tile> candidateTiles, HashSet<Tile> usedTiles, HashSet<string> spawnedEquipmentPrefabs) {
+            if (_runtimeRoomContentCatalog.equipmentPrefabs == null || _runtimeRoomContentCatalog.equipmentPrefabs.Length == 0) {
+                return;
+            }
+
+            int spawnCount = GetRandomCount(_runtimeRoomContentCatalog.minEquipmentSpawnCount, _runtimeRoomContentCatalog.maxEquipmentSpawnCount);
+            List<GameObject> candidates = new List<GameObject>(_runtimeRoomContentCatalog.equipmentPrefabs);
+            for (int i = 0; i < spawnCount && candidates.Count > 0; i++) {
+                GameObject prefab = candidates[Random.Range(0, candidates.Count)];
+                candidates.Remove(prefab);
+                if (prefab == null || !spawnedEquipmentPrefabs.Add(prefab.name)) {
+                    continue;
+                }
+
+                Tile targetTile = FindAvailableSpawnTile(candidateTiles, usedTiles, null);
+                if (targetTile == null) {
+                    return;
+                }
+
+                SpawnTrackedPrefab(prefab, targetTile, usedTiles);
+            }
+        }
+
+        private void SpawnFromCatalogPool(GameObject[] prefabPool, int minCount, int maxCount, List<Tile> candidateTiles, HashSet<Tile> usedTiles) {
+            if (prefabPool == null || prefabPool.Length == 0) {
+                return;
+            }
+
+            int spawnCount = GetRandomCount(minCount, maxCount);
+            for (int i = 0; i < spawnCount; i++) {
+                GameObject prefab = prefabPool[Random.Range(0, prefabPool.Length)];
+                if (prefab == null) {
+                    continue;
+                }
+
+                Tile targetTile = FindAvailableSpawnTile(candidateTiles, usedTiles, null);
+                if (targetTile == null) {
+                    return;
+                }
+
+                SpawnTrackedPrefab(prefab, targetTile, usedTiles);
+            }
+        }
+
+        private void SpawnSpecificPrefab(GameObject prefab, int minCount, int maxCount, List<Tile> candidateTiles, HashSet<Tile> usedTiles) {
+            if (prefab == null) {
+                return;
+            }
+
+            int spawnCount = GetRandomCount(minCount, maxCount);
+            for (int i = 0; i < spawnCount; i++) {
+                Tile targetTile = FindAvailableSpawnTile(candidateTiles, usedTiles, null);
+                if (targetTile == null) {
+                    return;
+                }
+
+                SpawnTrackedPrefab(prefab, targetTile, usedTiles);
+            }
+        }
+
+        private bool TrySpawnAccessoryPrefab(GameObject prefab, List<Tile> candidateTiles, HashSet<Tile> usedTiles) {
+            if (prefab == null) {
+                return false;
+            }
+
+            AccessoryPickup accessoryPickup = prefab.GetComponent<AccessoryPickup>();
+            if (accessoryPickup == null) {
+                return false;
+            }
+
+            if (!TryRegisterPermanentAccessorySpawn(accessoryPickup.accessoryType)) {
+                return false;
+            }
+
+            Tile targetTile = FindAvailableSpawnTile(candidateTiles, usedTiles, null);
+            if (targetTile == null) {
+                return false;
+            }
+
+            SpawnTrackedPrefab(prefab, targetTile, usedTiles);
+            return true;
+        }
+
+        private static Tile FindAvailableSpawnTile(List<Tile> candidateTiles, HashSet<Tile> usedTiles, Predicate<Tile> predicate) {
+            for (int i = 0; i < candidateTiles.Count; i++) {
+                Tile candidateTile = candidateTiles[i];
+                if (candidateTile == null || usedTiles.Contains(candidateTile)) {
+                    continue;
+                }
+
+                if (predicate != null && !predicate(candidateTile)) {
+                    continue;
+                }
+
+                return candidateTile;
+            }
+
+            return null;
+        }
+
+        private void SpawnTrackedPrefab(GameObject prefab, Tile tile, HashSet<Tile> usedTiles) {
+            if (prefab == null || tile == null) {
+                return;
+            }
+
+            GameObject spawnedObject = Instantiate(prefab, GetRuntimeSpawnPosition(tile), Quaternion.identity, _roomParent);
+            TrackGeneratedObject(spawnedObject);
+            usedTiles.Add(tile);
+        }
+
+        private static int GetRandomCount(int minCount, int maxCount) {
+            int sanitizedMin = Mathf.Max(0, minCount);
+            int sanitizedMax = Mathf.Max(sanitizedMin, maxCount);
+            return Random.Range(sanitizedMin, sanitizedMax + 1);
+        }
+
         private void SanitizePermanentAccessoryPickupsInScene() {
             _spawnedPermanentAccessories.Clear();
 
@@ -998,18 +1399,249 @@ namespace Spelunky {
             }
         }
 
-        private void PickRandomDirection(float downChance) {
-            if (Random.value < 1f - downChance) {
-                if (Random.value < 0.5f) {
-                    _direction = Vector2.right;
+        private bool ShouldGuaranteeFinalAltarRoom() {
+            return _activeStageDefinition != null &&
+                _activeStageDefinition.isFinalStage &&
+                _spawnedFinalAltarRoomCount == 0 &&
+                _activeSpecialRoomPools.TryGetValue(SpecialRoomType.FinalAltar, out Room[] roomPool) &&
+                HasRooms(roomPool);
+        }
+
+        private void TrySpawnGuaranteedFinalAltarRoom() {
+            if (!ShouldGuaranteeFinalAltarRoom()) {
+                return;
+            }
+
+            Room finalAltarRoom = GetRandomSpecialRoom(SpecialRoomType.FinalAltar);
+            if (finalAltarRoom == null) {
+                Debug.LogError($"LevelGenerator: Final stage {ActiveStageNumber} could not resolve a FinalAltar room.");
+                return;
+            }
+
+            if (TryFindGuaranteedFinalAltarSlot(out Vector2 targetIndex, out Room roomToReplace)) {
+                if (roomToReplace != null) {
+                    ReplaceRoom(finalAltarRoom, roomToReplace);
                 }
                 else {
-                    _direction = Vector2.left;
+                    SpawnRoom(finalAltarRoom, targetIndex);
+                }
+
+                _spawnedFinalAltarRoomCount++;
+                return;
+            }
+
+            Debug.LogError($"LevelGenerator: Final stage {ActiveStageNumber} could not reserve a slot for the FinalAltar room.");
+        }
+
+        private bool TryFindGuaranteedFinalAltarSlot(out Vector2 targetIndex, out Room roomToReplace) {
+            targetIndex = Vector2.zero;
+            roomToReplace = null;
+
+            bool hasCandidate = false;
+            float bestScore = float.MinValue;
+            for (int x = 0; x < Rooms.GetLength(0); x++) {
+                for (int y = 0; y < Rooms.GetLength(1); y++) {
+                    if (Rooms[x, y] != null) {
+                        continue;
+                    }
+
+                    Vector2 candidateIndex = new Vector2(x, y);
+                    float candidateScore = GetFinalAltarPlacementScore(candidateIndex);
+                    if (!hasCandidate || candidateScore > bestScore) {
+                        hasCandidate = true;
+                        bestScore = candidateScore;
+                        targetIndex = candidateIndex;
+                    }
                 }
             }
-            else {
+
+            if (hasCandidate) {
+                return true;
+            }
+
+            for (int x = 0; x < Rooms.GetLength(0); x++) {
+                for (int y = 0; y < Rooms.GetLength(1); y++) {
+                    Room candidateRoom = Rooms[x, y];
+                    if (candidateRoom == null || candidateRoom == firstRoom || candidateRoom == lastRoom) {
+                        continue;
+                    }
+
+                    Vector2 candidateIndex = new Vector2(x, y);
+                    float candidateScore = GetFinalAltarPlacementScore(candidateIndex);
+                    if (!hasCandidate || candidateScore > bestScore) {
+                        hasCandidate = true;
+                        bestScore = candidateScore;
+                        targetIndex = candidateIndex;
+                        roomToReplace = candidateRoom;
+                    }
+                }
+            }
+
+            return hasCandidate;
+        }
+
+        private float GetFinalAltarPlacementScore(Vector2 candidateIndex) {
+            float score = candidateIndex.y * 10f;
+
+            if (lastRoom != null) {
+                score += Vector2.Distance(candidateIndex, lastRoom.index);
+            }
+
+            if (firstRoom != null) {
+                score += Vector2.Distance(candidateIndex, firstRoom.index) * 0.25f;
+            }
+
+            return score;
+        }
+
+        private Room ReplaceRoom(Room roomToSpawn, Room roomToReplace) {
+            if (roomToSpawn == null || roomToReplace == null) {
+                return null;
+            }
+
+            Vector2 index = roomToReplace.index;
+            _generatedLevelObjects.Remove(roomToReplace.gameObject);
+            DestroyTrackedObject(roomToReplace.gameObject);
+            Rooms[(int)index.x, (int)index.y] = null;
+            return SpawnRoom(roomToSpawn, index);
+        }
+
+        private void PickRandomDirection(float downChance) {
+            if (GetMainPathStyle() == StageMainPathStyle.VerticalDescent) {
+                float verticalBias = downChance;
+                if (_lastDirection == Vector2.down) {
+                    verticalBias += 0.2f;
+                }
+
+                if (Random.value < Mathf.Clamp01(verticalBias)) {
+                    _direction = Vector2.down;
+                    return;
+                }
+
+                _direction = PickHorizontalDirection(true);
+                return;
+            }
+
+            float classicDownChance = downChance;
+            if (_lastDirection == Vector2.down) {
+                classicDownChance -= 0.1f;
+            }
+
+            if ((_lastDirection == Vector2.right || _lastDirection == Vector2.left) && Random.value < 0.55f) {
+                _direction = _lastDirection;
+            }
+            else if (Random.value < Mathf.Clamp01(classicDownChance)) {
                 _direction = Vector2.down;
             }
+            else {
+                _direction = PickHorizontalDirection();
+            }
+        }
+
+        private Vector2 PickHorizontalDirection(bool preserveLastHorizontalDirection = false) {
+            if (preserveLastHorizontalDirection) {
+                if (_lastDirection == Vector2.right) {
+                    return Vector2.right;
+                }
+
+                if (_lastDirection == Vector2.left) {
+                    return Vector2.left;
+                }
+            }
+
+            return Random.value < 0.5f ? Vector2.right : Vector2.left;
+        }
+
+        private Room PickPreferredMainPathRoom(List<Room> candidateRooms) {
+            if (candidateRooms == null || candidateRooms.Count == 0) {
+                return null;
+            }
+
+            string[] preferredHints = GetMainPathPreferredRoomNameHints();
+            if (preferredHints.Length == 0) {
+                return candidateRooms[Random.Range(0, candidateRooms.Count)];
+            }
+
+            List<Room> preferredRooms = new List<Room>();
+            foreach (Room room in candidateRooms) {
+                if (MatchesAnyMainPathRoomHint(room, preferredHints)) {
+                    preferredRooms.Add(room);
+                }
+            }
+
+            List<Room> roomPoolToUse = preferredRooms.Count > 0 ? preferredRooms : candidateRooms;
+            return roomPoolToUse[Random.Range(0, roomPoolToUse.Count)];
+        }
+
+        private static int CountRoomsMatchingHints(Room[] roomPool, string[] preferredHints) {
+            if (!HasRooms(roomPool) || preferredHints == null || preferredHints.Length == 0) {
+                return 0;
+            }
+
+            int matchingRoomCount = 0;
+            foreach (Room room in roomPool) {
+                if (MatchesAnyMainPathRoomHint(room, preferredHints)) {
+                    matchingRoomCount++;
+                }
+            }
+
+            return matchingRoomCount;
+        }
+
+        private static bool MatchesAnyMainPathRoomHint(Room room, string[] preferredHints) {
+            if (room == null || preferredHints == null || preferredHints.Length == 0) {
+                return false;
+            }
+
+            string roomName = room.name;
+            foreach (string preferredHint in preferredHints) {
+                if (string.IsNullOrWhiteSpace(preferredHint)) {
+                    continue;
+                }
+
+                if (roomName.IndexOf(preferredHint, StringComparison.OrdinalIgnoreCase) >= 0) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void LoadResourceRoomPools() {
+            UnityEngine.Object[] resourceRooms = Resources.LoadAll("Rooms", typeof(Room));
+            List<Room> normalRoomsFromResources = new List<Room>();
+            List<Room> sacrificeRoomsFromResources = new List<Room>();
+            List<Room> finalAltarRoomsFromResources = new List<Room>();
+
+            foreach (UnityEngine.Object resource in resourceRooms) {
+                Room room = resource as Room;
+                if (room == null) {
+                    continue;
+                }
+
+                string roomName = room.name;
+                if (roomName.IndexOf("RoomSpecialAltar", StringComparison.OrdinalIgnoreCase) >= 0) {
+                    finalAltarRoomsFromResources.Add(room);
+                    continue;
+                }
+
+                if (roomName.IndexOf("RoomSpecialSacrifice", StringComparison.OrdinalIgnoreCase) >= 0) {
+                    sacrificeRoomsFromResources.Add(room);
+                    continue;
+                }
+
+                if (roomName.IndexOf("RoomSpecial", StringComparison.OrdinalIgnoreCase) >= 0) {
+                    continue;
+                }
+
+                normalRoomsFromResources.Add(room);
+            }
+
+            _resourceNormalRooms = normalRoomsFromResources.ToArray();
+            _resourceSpecialRoomPools.Clear();
+            _resourceSpecialRoomPools[SpecialRoomType.Trap] = Array.Empty<Room>();
+            _resourceSpecialRoomPools[SpecialRoomType.Sacrifice] = sacrificeRoomsFromResources.ToArray();
+            _resourceSpecialRoomPools[SpecialRoomType.FinalAltar] = finalAltarRoomsFromResources.ToArray();
         }
 
         /// <summary>

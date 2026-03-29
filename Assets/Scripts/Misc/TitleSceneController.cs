@@ -18,16 +18,26 @@ namespace Spelunky {
         [SerializeField] private string startButtonText = "START GAME";
         [SerializeField] private string quitButtonText = "QUIT";
         [SerializeField] private Color backgroundColor = new Color(0.08f, 0.07f, 0.05f, 1f);
+        [SerializeField] private string existingPlayTextObjectName = "Play";
+        [SerializeField] private string existingQuitTextObjectName = "Quit";
+
+        private Button _playButton;
+        private Button _quitButton;
 
         private void Awake() {
             EnsureCamera();
             EnsureEventSystem();
-            CreateTitleUI();
+
+            if (!TryBindExistingMenu()) {
+                CreateTitleUI();
+            }
         }
 
         private void Update() {
+            HandleKeyboardNavigation();
+
             if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space)) {
-                StartGame();
+                ActivateCurrentSelection();
             }
         }
 
@@ -71,6 +81,20 @@ namespace Spelunky {
 
             AudioListener audioListener = cameraObject.AddComponent<AudioListener>();
             audioListener.enabled = true;
+        }
+
+        private bool TryBindExistingMenu() {
+            Text playText = FindTextByName(existingPlayTextObjectName);
+            Text quitText = FindTextByName(existingQuitTextObjectName);
+
+            if (playText == null || quitText == null) {
+                return false;
+            }
+
+            _playButton = BindTextAsButton(playText, StartGame);
+            _quitButton = BindTextAsButton(quitText, QuitGame);
+            LinkNavigation(_playButton, _quitButton);
+            return true;
         }
 
         private void CreateTitleUI() {
@@ -150,6 +174,125 @@ namespace Spelunky {
 
             CreateText(buttonObject.transform, "Label", label, font, 12, FontStyle.Bold, new Vector2(0.5f, 0.5f), Vector2.zero, size, TextAnchor.MiddleCenter, Color.white);
             return buttonObject;
+        }
+
+        private static Text FindTextByName(string objectName) {
+            if (string.IsNullOrWhiteSpace(objectName)) {
+                return null;
+            }
+
+            Text[] texts = FindObjectsOfType<Text>(true);
+            for (int i = 0; i < texts.Length; i++) {
+                Text text = texts[i];
+                if (text != null && text.name == objectName) {
+                    return text;
+                }
+            }
+
+            return null;
+        }
+
+        private static Button BindTextAsButton(Text text, UnityEngine.Events.UnityAction action) {
+            if (text == null || action == null) {
+                return null;
+            }
+
+            Button button = text.GetComponent<Button>();
+            if (button == null) {
+                button = text.gameObject.AddComponent<Button>();
+            }
+
+            if (text.GetComponent<TitleMenuTextEffect>() == null) {
+                text.gameObject.AddComponent<TitleMenuTextEffect>();
+            }
+
+            button.transition = Selectable.Transition.ColorTint;
+            button.targetGraphic = text;
+
+            Color baseColor = text.color;
+            ColorBlock colors = button.colors;
+            colors.normalColor = baseColor;
+            colors.highlightedColor = new Color(
+                Mathf.Min(1f, baseColor.r + 0.12f),
+                Mathf.Min(1f, baseColor.g + 0.12f),
+                Mathf.Min(1f, baseColor.b + 0.12f),
+                baseColor.a
+            );
+            colors.pressedColor = new Color(baseColor.r * 0.85f, baseColor.g * 0.85f, baseColor.b * 0.85f, baseColor.a);
+            colors.selectedColor = colors.highlightedColor;
+            button.colors = colors;
+
+            Navigation navigation = button.navigation;
+            navigation.mode = Navigation.Mode.None;
+            button.navigation = navigation;
+
+            button.onClick.RemoveAllListeners();
+            button.onClick.AddListener(action);
+            text.raycastTarget = true;
+            return button;
+        }
+
+        private static void LinkNavigation(Button playButton, Button quitButton) {
+            if (playButton == null || quitButton == null) {
+                return;
+            }
+
+            Navigation playNavigation = playButton.navigation;
+            playNavigation.mode = Navigation.Mode.Explicit;
+            playNavigation.selectOnDown = quitButton;
+            playNavigation.selectOnUp = quitButton;
+            playButton.navigation = playNavigation;
+
+            Navigation quitNavigation = quitButton.navigation;
+            quitNavigation.mode = Navigation.Mode.Explicit;
+            quitNavigation.selectOnDown = playButton;
+            quitNavigation.selectOnUp = playButton;
+            quitButton.navigation = quitNavigation;
+        }
+
+        private void HandleKeyboardNavigation() {
+            if (EventSystem.current == null || _playButton == null || _quitButton == null) {
+                return;
+            }
+
+            bool movedUp = Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W);
+            bool movedDown = Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S);
+            bool movedByTab = Input.GetKeyDown(KeyCode.Tab);
+
+            if (!movedUp && !movedDown && !movedByTab) {
+                return;
+            }
+
+            GameObject currentSelection = EventSystem.current.currentSelectedGameObject;
+
+            if (currentSelection == null) {
+                EventSystem.current.SetSelectedGameObject(movedDown ? _quitButton.gameObject : _playButton.gameObject);
+                return;
+            }
+
+            if (currentSelection == _playButton.gameObject && (movedDown || movedByTab)) {
+                EventSystem.current.SetSelectedGameObject(_quitButton.gameObject);
+                return;
+            }
+
+            if (currentSelection == _quitButton.gameObject && (movedUp || movedByTab)) {
+                EventSystem.current.SetSelectedGameObject(_playButton.gameObject);
+            }
+        }
+
+        private void ActivateCurrentSelection() {
+            if (EventSystem.current == null || EventSystem.current.currentSelectedGameObject == null) {
+                StartGame();
+                return;
+            }
+
+            GameObject currentSelection = EventSystem.current.currentSelectedGameObject;
+            if (currentSelection == _quitButton?.gameObject) {
+                QuitGame();
+                return;
+            }
+
+            StartGame();
         }
 
         private static Text CreateText(Transform parent, string name, string content, Font font, int fontSize, FontStyle fontStyle, Vector2 anchor, Vector2 position, Vector2 size, TextAnchor alignment, Color color) {

@@ -14,6 +14,7 @@ namespace Spelunky {
 
         public static RunManager Instance { get; private set; }
         public const int DefaultStageCount = RunState.DefaultTotalStageCount;
+        private const string EndingSceneName = "Ending";
 
         public RunState CurrentRun { get; private set; }
         public RunResult CurrentResult { get; private set; }
@@ -21,10 +22,14 @@ namespace Spelunky {
         public Player ActivePlayer { get; private set; }
         public RunStageLoadRequest PendingStageLoadRequest { get; private set; }
         public string LastRunResultLogPath { get; private set; }
+        public bool IsCurrentStageFinal => CurrentRun != null && CurrentRun.currentStageIndex >= CurrentRun.totalStageCount;
+        public bool IsFinalEscapeActive => CurrentRun != null && CurrentRun.isFinalEscapeActive;
+        public bool IsFinalEscapePending => IsCurrentStageFinal && !IsFinalEscapeActive;
 
         private readonly List<RunResult> _completedResults = new List<RunResult>();
         private StageRunResult _activeStageResult;
         private string _pendingDeathCause;
+        private Component _preservedHeldItem;
 
         public static RunManager EnsureInstance() {
             if (Instance != null) {
@@ -85,9 +90,14 @@ namespace Spelunky {
                 return;
             }
 
+            if (IsFinalEscapePending) {
+                Debug.LogWarning("RunManager: Ignoring final stage exit request until the relic has been recovered.");
+                return;
+            }
+
             CapturePlayerState(ActivePlayer);
             BeginStageTransition();
-            CompleteActiveStage("cleared");
+            CompleteActiveStage(IsCurrentStageFinal ? "escaped" : "cleared");
 
             RunStageLoadRequest nextStageRequest = CreateNextStageLoadRequest(currentSceneName);
             if (nextStageRequest == null) {
@@ -107,6 +117,7 @@ namespace Spelunky {
             }
 
             ApplyRunStateToPlayer(player);
+            RestoreHeldItemToPlayer(player);
             CapturePlayerState(player);
         }
 
@@ -189,6 +200,55 @@ namespace Spelunky {
                 : $"Last result: {LastCompletedResult.endReason} @ stage {LastCompletedResult.finalStageIndex}";
 
             return $"{CurrentRun.ToDebugString()}\n{activeStageSummary}\n{lastResultSummary}";
+        }
+
+        public bool CanUseExit() {
+            EnsureRun();
+            return !IsFinalEscapePending;
+        }
+
+        public bool TryActivateFinalEscape(string triggerSource = "relic", float timeLimitSeconds = RunState.DefaultFinalEscapeTimeLimitSeconds) {
+            EnsureRun();
+
+            if (!IsCurrentStageFinal || CurrentRun.IsRunEnded || CurrentRun.progressState != RunProgressState.Active) {
+                return false;
+            }
+
+            if (CurrentRun.isFinalEscapeActive) {
+                return false;
+            }
+
+            CurrentRun.isFinalEscapeActive = true;
+            CurrentRun.finalEscapeTriggeredAtStageTime = CurrentRun.currentStageElapsedTime;
+            CurrentRun.finalEscapeTimeLimitSeconds = Mathf.Max(1f, timeLimitSeconds);
+
+            if (_activeStageResult != null) {
+                _activeStageResult.finalEscapeTriggered = true;
+                _activeStageResult.finalEscapeTriggeredAtSeconds = CurrentRun.finalEscapeTriggeredAtStageTime;
+                _activeStageResult.finalEscapeTimeLimitSeconds = CurrentRun.finalEscapeTimeLimitSeconds;
+                _activeStageResult.finalEscapeTriggerSource = string.IsNullOrWhiteSpace(triggerSource) ? "relic" : triggerSource;
+            }
+
+            Debug.Log(
+                $"RunManager: Final escape activated at {CurrentRun.finalEscapeTriggeredAtStageTime:0.00}s " +
+                $"with {CurrentRun.finalEscapeTimeLimitSeconds:0.0}s remaining."
+            );
+            return true;
+        }
+
+        public float GetFinalEscapeTimeRemaining() {
+            EnsureRun();
+            if (!CurrentRun.isFinalEscapeActive) {
+                return 0f;
+            }
+
+            float elapsedSinceTrigger = Mathf.Max(0f, CurrentRun.currentStageElapsedTime - CurrentRun.finalEscapeTriggeredAtStageTime);
+            return Mathf.Max(0f, CurrentRun.finalEscapeTimeLimitSeconds - elapsedSinceTrigger);
+        }
+
+        public bool HasFinalEscapeExpired() {
+            EnsureRun();
+            return CurrentRun.isFinalEscapeActive && GetFinalEscapeTimeRemaining() <= 0f;
         }
 
         public void SetPendingDeathCause(string cause) {
@@ -279,6 +339,7 @@ namespace Spelunky {
                 return;
             }
 
+            PreserveHeldItemForStageTransition(ActivePlayer);
             PendingStageLoadRequest = CloneStageLoadRequest(loadRequest);
             ApplyStageLoadRequest(loadRequest);
             Debug.Log($"RunManager: {logPrefix}. Trying GameManager in-place transition for {loadRequest}.");
@@ -295,10 +356,72 @@ namespace Spelunky {
             SceneManager.LoadScene(loadRequest.sceneName);
         }
 
+        private void PreserveHeldItemForStageTransition(Player player) {
+            ClearPreservedHeldItem();
+
+            if (player == null || player.Holding == null || !player.Holding.IsHoldingItem) {
+                return;
+            }
+
+            IHoldable heldItem = player.Holding.HeldItem;
+            if (heldItem is not Component heldComponent || heldComponent == null) {
+                return;
+            }
+
+            if (heldComponent is Key || heldComponent is Chest) {
+                return;
+            }
+
+            player.Holding.Drop();
+
+            GameObject heldObject = heldComponent.gameObject;
+            if (heldObject == null) {
+                return;
+            }
+
+            heldObject.transform.SetParent(null);
+            heldObject.SetActive(false);
+            DontDestroyOnLoad(heldObject);
+            _preservedHeldItem = heldComponent;
+            Debug.Log($"RunManager: Preserved held item '{heldObject.name}' for next stage.");
+        }
+
+        private void RestoreHeldItemToPlayer(Player player) {
+            if (_preservedHeldItem == null || player == null || player.Holding == null) {
+                return;
+            }
+
+            Component preservedComponent = _preservedHeldItem;
+            _preservedHeldItem = null;
+
+            if (preservedComponent == null) {
+                return;
+            }
+
+            GameObject heldObject = preservedComponent.gameObject;
+            if (heldObject == null) {
+                return;
+            }
+
+            SceneManager.MoveGameObjectToScene(heldObject, player.gameObject.scene);
+            heldObject.transform.position = player.transform.position;
+            heldObject.SetActive(true);
+
+            if (preservedComponent is IHoldable holdable && player.Holding.TryPickUp(holdable)) {
+                Debug.Log($"RunManager: Restored held item '{heldObject.name}' to player.");
+                return;
+            }
+
+            Debug.LogWarning($"RunManager: Failed to restore held item '{heldObject.name}' to player. Leaving it in the scene.");
+        }
+
         private void ApplyStageLoadRequest(RunStageLoadRequest loadRequest) {
             CurrentRun.currentStageIndex = loadRequest.stageIndex;
             CurrentRun.currentStageId = loadRequest.stageId;
             CurrentRun.currentStageElapsedTime = 0f;
+            CurrentRun.isFinalEscapeActive = false;
+            CurrentRun.finalEscapeTriggeredAtStageTime = 0f;
+            CurrentRun.finalEscapeTimeLimitSeconds = RunState.DefaultFinalEscapeTimeLimitSeconds;
             _pendingDeathCause = null;
         }
 
@@ -336,7 +459,11 @@ namespace Spelunky {
                 sceneName = sceneName,
                 durationSeconds = 0f,
                 outcome = "active",
-                deathCause = string.Empty
+                deathCause = string.Empty,
+                finalEscapeTriggered = false,
+                finalEscapeTriggeredAtSeconds = 0f,
+                finalEscapeTimeLimitSeconds = 0f,
+                finalEscapeTriggerSource = string.Empty
             };
 
             CurrentRun.currentStageElapsedTime = 0f;
@@ -384,6 +511,7 @@ namespace Spelunky {
         }
 
         private void ResetRuntimeReferences() {
+            ClearPreservedHeldItem();
             ActivePlayer = null;
             CurrentRun = null;
             CurrentResult = null;
@@ -392,22 +520,43 @@ namespace Spelunky {
             _pendingDeathCause = null;
         }
 
+        private void ClearPreservedHeldItem() {
+            if (_preservedHeldItem == null) {
+                return;
+            }
+
+            GameObject heldObject = _preservedHeldItem.gameObject;
+            if (heldObject != null) {
+                Destroy(heldObject);
+            }
+
+            _preservedHeldItem = null;
+        }
+
         private void ShowRunClearResult(string sceneName) {
             GameOverUI.ShowResult(new GameOverUI.ResultViewModel {
                 Title = "RUN CLEAR",
                 ValueLabel = "GOLD / TIME",
                 ValueText = $"{CurrentRun.gold}\n{CurrentRun.elapsedTime:0.0}s",
-                PrimaryActionLabel = "RESTART",
-                PrimaryAction = () => RestartRun(sceneName)
+                PrimaryActionLabel = "ENDING",
+                PrimaryAction = OpenEndingScene
             });
         }
 
+        private void OpenEndingScene() {
+            DismissResultUI();
+            SceneManager.LoadScene(EndingSceneName);
+        }
+
         private void DismissResultUI() {
-            if (GameOverUI.Instance == null) {
+            if (UIManager.Instance != null) {
+                UIManager.Instance.ResetGameplayUI();
                 return;
             }
 
-            Destroy(GameOverUI.Instance.gameObject);
+            if (GameOverUI.Instance != null) {
+                GameOverUI.Instance.HideResult();
+            }
         }
 
         private RunResult CreateRunResult(RunState runState) {

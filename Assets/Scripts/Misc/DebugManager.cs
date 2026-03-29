@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Spelunky {
 
@@ -48,7 +49,7 @@ namespace Spelunky {
             DontDestroyOnLoad(gameObject);
 
             RuntimeToolsEnabled = Application.isEditor || Debug.isDebugBuild;
-            IsOverlayVisible = RuntimeToolsEnabled;
+            IsOverlayVisible = false;
             InitializeSessionState();
 
             if (GetComponent<PlaytestDebugOverlay>() == null) {
@@ -90,6 +91,14 @@ namespace Spelunky {
 
             RunManager.Instance.ForceSetResources(health, bombs, ropes);
             DumpRunState();
+        }
+
+        public void OpenEndingScene() {
+            if (!RuntimeToolsEnabled) {
+                return;
+            }
+
+            SceneManager.LoadScene("Ending");
         }
 
         public string GetLastRunResultSummary() {

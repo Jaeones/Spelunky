@@ -33,10 +33,17 @@ namespace Spelunky {
 
             for (int i = 0; i < stageResults.Count; i++) {
                 StageRunResult stage = stageResults[i];
-                builder.AppendLine(
+                string stageLine =
                     $"Stage {stage.stageIndex}: {stage.outcome} in {stage.durationSeconds:0.00}s" +
-                    (string.IsNullOrWhiteSpace(stage.deathCause) ? string.Empty : $" ({stage.deathCause})")
-                );
+                    (string.IsNullOrWhiteSpace(stage.deathCause) ? string.Empty : $" ({stage.deathCause})");
+                builder.AppendLine(stageLine);
+
+                if (stage.finalEscapeTriggered) {
+                    builder.AppendLine(
+                        $"  Final escape: trigger {stage.finalEscapeTriggeredAtSeconds:0.00}s / limit {stage.finalEscapeTimeLimitSeconds:0.0}s" +
+                        (string.IsNullOrWhiteSpace(stage.finalEscapeTriggerSource) ? string.Empty : $" / source {stage.finalEscapeTriggerSource}")
+                    );
+                }
             }
 
             return builder.ToString();
@@ -51,6 +58,10 @@ namespace Spelunky {
         public float durationSeconds;
         public string outcome;
         public string deathCause;
+        public bool finalEscapeTriggered;
+        public float finalEscapeTriggeredAtSeconds;
+        public float finalEscapeTimeLimitSeconds;
+        public string finalEscapeTriggerSource;
     }
 
 }

@@ -117,6 +117,8 @@ namespace Spelunky {
                 _pendingRemove.Clear();
             }
 
+            PruneInvalidEntities();
+
             // Update all active entities
             _isIterating = true;
             for (int i = 0; i < _entities.Count; i++) {
@@ -145,6 +147,8 @@ namespace Spelunky {
                 }
                 _pendingRemoveLate.Clear();
             }
+
+            PruneInvalidLateTickables();
 
             // Update all late tickables
             _isIterating = true;
@@ -268,19 +272,39 @@ namespace Spelunky {
 
         private void PruneInvalidEarlyTickables() {
             for (int i = _earlyTickables.Count - 1; i >= 0; i--) {
-                if (!IsValidEarlyTickable(_earlyTickables[i])) {
+                if (!IsValidUnityTickable(_earlyTickables[i])) {
                     _earlyTickables.RemoveAt(i);
                 }
             }
         }
 
-        private static bool IsValidEarlyTickable(IEarlyTickable tickable) {
+        private void PruneInvalidEntities() {
+            for (int i = _entities.Count - 1; i >= 0; i--) {
+                if (!IsValidUnityTickable(_entities[i])) {
+                    _entities.RemoveAt(i);
+                }
+            }
+        }
+
+        private void PruneInvalidLateTickables() {
+            for (int i = _lateTickables.Count - 1; i >= 0; i--) {
+                if (!IsValidUnityTickable(_lateTickables[i])) {
+                    _lateTickables.RemoveAt(i);
+                }
+            }
+        }
+
+        private static bool IsValidUnityTickable(object tickable) {
             if (tickable == null) {
                 return false;
             }
 
             if (tickable is Behaviour behaviour) {
                 return behaviour != null && behaviour.isActiveAndEnabled;
+            }
+
+            if (tickable is UnityEngine.Object unityObject) {
+                return unityObject != null;
             }
 
             return true;

@@ -13,7 +13,13 @@ namespace Spelunky {
         public AudioClip enterDoorClip;
 
         public override bool CanEnterState() {
-            if (player._exitDoor == null) {
+            Exit exitDoor = player._exitDoor;
+            if (exitDoor == null) {
+                return false;
+            }
+
+            if (!exitDoor.CanPlayerEnter(player)) {
+                exitDoor.HandleLockedAttempt(player);
                 return false;
             }
 

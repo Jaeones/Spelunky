@@ -8,6 +8,12 @@ public class AudioManager : Singleton<AudioManager> {
     public AudioMixerGroup ambientGroup;
     public AudioMixerGroup musicGroup;
 
+    [Header("Stage Music")]
+    [SerializeField] private AudioClip stage1Music;
+    [SerializeField] private AudioClip stage2Music;
+    [SerializeField] private AudioClip stage3Music;
+    [SerializeField] private AudioClip stage4Music;
+
     public enum AudioGroup {
 
         SFX,
@@ -19,6 +25,12 @@ public class AudioManager : Singleton<AudioManager> {
     private const float defaultMinDistance = 5f;
     private const float defaultMaxDistance = 50f;
     private const bool looping = false;
+    private AudioSource _musicSource;
+
+    public override void Awake() {
+        base.Awake();
+        EnsureMusicSource();
+    }
 
     /**
      * Plays a sound on the supplied Audiosource with our settings so
@@ -62,6 +74,37 @@ public class AudioManager : Singleton<AudioManager> {
         Destroy(go, clip.length);
     }
 
+    public void PlayStageMusic(int stageIndex) {
+        AudioClip clip = GetStageMusicClip(stageIndex);
+        if (clip == null) {
+            return;
+        }
+
+        EnsureMusicSource();
+        if (_musicSource == null) {
+            return;
+        }
+
+        if (_musicSource.clip == clip && _musicSource.isPlaying) {
+            return;
+        }
+
+        _musicSource.clip = clip;
+        ApplyAudioSourceSettings(_musicSource, AudioGroup.Music, 1f, defaultMinDistance, defaultMaxDistance, true);
+        _musicSource.spatialBlend = 0f;
+        _musicSource.volume = 1f;
+        _musicSource.Play();
+    }
+
+    public void StopMusic() {
+        if (_musicSource == null) {
+            return;
+        }
+
+        _musicSource.Stop();
+        _musicSource.clip = null;
+    }
+
     private void ApplyAudioSourceSettings(AudioSource source, AudioGroup group, float pitch = 1f, float minDistance = defaultMinDistance, float maxDistance = defaultMaxDistance, bool loop = looping) {
         source.pitch = pitch;
         source.dopplerLevel = 0;
@@ -79,8 +122,34 @@ public class AudioManager : Singleton<AudioManager> {
                 source.outputAudioMixerGroup = ambientGroup;
                 break;
             case AudioGroup.Music:
-                source.outputAudioMixerGroup = ambientGroup;
+                source.outputAudioMixerGroup = musicGroup;
                 break;
+        }
+    }
+
+    private void EnsureMusicSource() {
+        if (_musicSource != null) {
+            return;
+        }
+
+        _musicSource = GetComponent<AudioSource>();
+        if (_musicSource == null) {
+            _musicSource = gameObject.AddComponent<AudioSource>();
+        }
+    }
+
+    private AudioClip GetStageMusicClip(int stageIndex) {
+        switch (stageIndex) {
+            case 1:
+                return stage1Music;
+            case 2:
+                return stage2Music;
+            case 3:
+                return stage3Music;
+            case 4:
+                return stage4Music;
+            default:
+                return null;
         }
     }
 

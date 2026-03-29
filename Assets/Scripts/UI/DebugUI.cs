@@ -46,6 +46,10 @@ namespace Spelunky {
             if (Input.GetKeyDown(KeyCode.F9)) {
                 DebugManager.Instance.WarpToStage(4);
             }
+
+            if (Input.GetKeyDown(KeyCode.F10)) {
+                DebugManager.Instance.OpenEndingScene();
+            }
         }
 
         private void OnGUI() {
@@ -60,7 +64,7 @@ namespace Spelunky {
             _scrollPosition = GUILayout.BeginScrollView(_scrollPosition, false, true);
             GUILayout.BeginVertical();
 
-            GUILayout.Label("Hotkeys: F1 Toggle, F2 Dump, F5 Baseline, F6-F9 Warp");
+            GUILayout.Label("Hotkeys: F1 Toggle, F2 Dump, F5 Baseline, F6-F9 Warp, F10 Ending");
 
             RunManager runManager = RunManager.Instance;
             if (runManager != null && runManager.CurrentRun != null) {
@@ -97,6 +101,10 @@ namespace Spelunky {
                 DebugManager.Instance.WarpToStage(4);
             }
             GUILayout.EndHorizontal();
+
+            if (GUILayout.Button("Open Ending Scene")) {
+                DebugManager.Instance.OpenEndingScene();
+            }
 
             GUILayout.Space(8f);
             GUILayout.Label("Force Resources");

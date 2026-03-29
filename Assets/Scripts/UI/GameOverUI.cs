@@ -29,6 +29,9 @@ namespace Spelunky {
         private static readonly Color DefaultButtonColor = new Color(0.15f, 0.15f, 0.15f, 0.95f);
         private static readonly Color DefaultButtonHighlightColor = new Color(0.25f, 0.25f, 0.25f, 0.95f);
         private static readonly Color DefaultButtonPressedColor = new Color(0.1f, 0.1f, 0.1f, 0.95f);
+        private static readonly Color DefaultSignPanelColor = new Color(0.82f, 0.74f, 0.6f, 0.96f);
+        private static readonly Color DefaultSignBorderColor = new Color(0.22f, 0.16f, 0.08f, 0.95f);
+        private static readonly Color DefaultRunClearPanelColor = new Color(0.1f, 0.1f, 0.1f, 0.92f);
 
         public static GameOverUI Instance { get; private set; }
 
@@ -50,6 +53,7 @@ namespace Spelunky {
         [SerializeField] private string runClearRestartLabelText = "RESTART";
 
         private GameObject _panel;
+        private Image _contentPanelImage;
         private Text _titleValueText;
         private Text _valueLabelText;
         private Text _valueText;
@@ -219,25 +223,43 @@ namespace Spelunky {
 
             Font fontToUse = defaultFont != null ? defaultFont : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
 
-            _titleValueText = CreateText("Title", _panel.transform, fontToUse, titleText, 20, FontStyle.Bold);
+            GameObject contentPanel = new GameObject("ResultCard", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+            contentPanel.transform.SetParent(_panel.transform, false);
+
+            RectTransform contentRect = contentPanel.GetComponent<RectTransform>();
+            contentRect.anchorMin = new Vector2(0.5f, 0.5f);
+            contentRect.anchorMax = new Vector2(0.5f, 0.5f);
+            contentRect.pivot = new Vector2(0.5f, 0.5f);
+            contentRect.anchoredPosition = new Vector2(0f, 8f);
+            contentRect.sizeDelta = new Vector2(210f, 168f);
+
+            _contentPanelImage = contentPanel.GetComponent<Image>();
+            _contentPanelImage.color = DefaultRunClearPanelColor;
+
+            Outline cardOutline = contentPanel.GetComponent<Outline>();
+            cardOutline.effectColor = DefaultSignBorderColor;
+            cardOutline.effectDistance = new Vector2(2f, -2f);
+            cardOutline.useGraphicAlpha = true;
+
+            _titleValueText = CreateText("Title", contentPanel.transform, fontToUse, titleText, 20, FontStyle.Bold);
             RectTransform titleRect = _titleValueText.GetComponent<RectTransform>();
-            titleRect.sizeDelta = new Vector2(280f, 32f);
-            titleRect.anchoredPosition = new Vector2(0f, 52f);
+            titleRect.sizeDelta = new Vector2(180f, 36f);
+            titleRect.anchoredPosition = new Vector2(0f, 50f);
 
-            _valueLabelText = CreateText("ValueLabel", _panel.transform, fontToUse, scoreLabelText, 12, FontStyle.Normal);
+            _valueLabelText = CreateText("ValueLabel", contentPanel.transform, fontToUse, scoreLabelText, 12, FontStyle.Normal);
             RectTransform valueLabelRect = _valueLabelText.GetComponent<RectTransform>();
-            valueLabelRect.sizeDelta = new Vector2(200f, 20f);
-            valueLabelRect.anchoredPosition = new Vector2(0f, 15f);
+            valueLabelRect.sizeDelta = new Vector2(180f, 28f);
+            valueLabelRect.anchoredPosition = new Vector2(0f, 16f);
 
-            _valueText = CreateText("ValueText", _panel.transform, fontToUse, "0", 16, FontStyle.Bold);
+            _valueText = CreateText("ValueText", contentPanel.transform, fontToUse, "0", 16, FontStyle.Bold);
             RectTransform valueRect = _valueText.GetComponent<RectTransform>();
-            valueRect.sizeDelta = new Vector2(200f, 24f);
-            valueRect.anchoredPosition = new Vector2(0f, -5f);
+            valueRect.sizeDelta = new Vector2(180f, 56f);
+            valueRect.anchoredPosition = new Vector2(0f, -12f);
 
-            _primaryActionButton = CreateButton("PrimaryActionButton", _panel.transform, fontToUse, restartLabelText, out _primaryActionText);
+            _primaryActionButton = CreateButton("PrimaryActionButton", contentPanel.transform, fontToUse, restartLabelText, out _primaryActionText);
             RectTransform buttonRect = _primaryActionButton.GetComponent<RectTransform>();
             buttonRect.sizeDelta = new Vector2(140f, 26f);
-            buttonRect.anchoredPosition = new Vector2(0f, -55f);
+            buttonRect.anchoredPosition = new Vector2(0f, -64f);
 
             _isBuilt = true;
         }
@@ -254,6 +276,8 @@ namespace Spelunky {
             textComponent.alignment = TextAnchor.MiddleCenter;
             textComponent.color = Color.white;
             textComponent.raycastTarget = false;
+            textComponent.horizontalOverflow = HorizontalWrapMode.Wrap;
+            textComponent.verticalOverflow = VerticalWrapMode.Overflow;
 
             RectTransform rect = go.GetComponent<RectTransform>();
             rect.anchorMin = new Vector2(0.5f, 0.5f);
@@ -366,6 +390,8 @@ namespace Spelunky {
                 _primaryActionButton.onClick.RemoveAllListeners();
                 _primaryActionButton.onClick.AddListener(result.PrimaryAction ?? Restart);
             }
+
+            ApplyVisualPreset(result.Preset);
         }
 
         private static UnityAction CreateRestartAction(string sceneName) {
@@ -432,6 +458,60 @@ namespace Spelunky {
                 case ResultPreset.Custom:
                 default:
                     return restartLabelText;
+            }
+        }
+
+        private void ApplyVisualPreset(ResultPreset preset) {
+            if (_contentPanelImage == null || _titleValueText == null || _valueLabelText == null || _valueText == null || _primaryActionText == null) {
+                return;
+            }
+
+            RectTransform contentRect = _contentPanelImage.rectTransform;
+            RectTransform titleRect = _titleValueText.rectTransform;
+            RectTransform labelRect = _valueLabelText.rectTransform;
+            RectTransform valueRect = _valueText.rectTransform;
+            RectTransform buttonRect = _primaryActionButton != null ? _primaryActionButton.GetComponent<RectTransform>() : null;
+
+            bool isGameOver = preset == ResultPreset.GameOver;
+            _contentPanelImage.color = isGameOver ? DefaultSignPanelColor : DefaultRunClearPanelColor;
+
+            if (contentRect != null) {
+                contentRect.sizeDelta = isGameOver ? new Vector2(214f, 228f) : new Vector2(210f, 168f);
+                contentRect.anchoredPosition = isGameOver ? new Vector2(0f, 4f) : new Vector2(0f, 8f);
+            }
+
+            _titleValueText.color = isGameOver ? DefaultSignBorderColor : Color.white;
+            _valueLabelText.color = isGameOver ? DefaultSignBorderColor : Color.white;
+            _valueText.color = isGameOver ? DefaultSignBorderColor : Color.white;
+            _primaryActionText.color = Color.white;
+
+            _titleValueText.fontSize = isGameOver ? 38 : 20;
+            _valueLabelText.fontSize = isGameOver ? 26 : 12;
+            _valueText.fontSize = isGameOver ? 24 : 16;
+            _primaryActionText.fontSize = isGameOver ? 18 : 14;
+            _titleValueText.fontStyle = FontStyle.Bold;
+            _valueLabelText.fontStyle = FontStyle.Bold;
+            _valueText.fontStyle = isGameOver ? FontStyle.Normal : FontStyle.Bold;
+            _primaryActionText.fontStyle = FontStyle.Bold;
+
+            if (titleRect != null) {
+                titleRect.sizeDelta = isGameOver ? new Vector2(172f, 48f) : new Vector2(180f, 36f);
+                titleRect.anchoredPosition = isGameOver ? new Vector2(0f, 78f) : new Vector2(0f, 50f);
+            }
+
+            if (labelRect != null) {
+                labelRect.sizeDelta = isGameOver ? new Vector2(172f, 38f) : new Vector2(180f, 28f);
+                labelRect.anchoredPosition = isGameOver ? new Vector2(0f, 38f) : new Vector2(0f, 16f);
+            }
+
+            if (valueRect != null) {
+                valueRect.sizeDelta = isGameOver ? new Vector2(172f, 84f) : new Vector2(180f, 56f);
+                valueRect.anchoredPosition = isGameOver ? new Vector2(0f, -18f) : new Vector2(0f, -12f);
+            }
+
+            if (buttonRect != null) {
+                buttonRect.sizeDelta = isGameOver ? new Vector2(116f, 28f) : new Vector2(140f, 26f);
+                buttonRect.anchoredPosition = isGameOver ? new Vector2(0f, -90f) : new Vector2(0f, -64f);
             }
         }
 

@@ -34,6 +34,7 @@ namespace Spelunky {
     public class RunState {
 
         public const int DefaultTotalStageCount = 4;
+        public const float DefaultFinalEscapeTimeLimitSeconds = 45f;
 
         public string runId;
         public int currentStageIndex;
@@ -48,6 +49,8 @@ namespace Spelunky {
         public float currentStageElapsedTime;
         public RunProgressState progressState;
         public bool isFinalEscapeActive;
+        public float finalEscapeTriggeredAtStageTime;
+        public float finalEscapeTimeLimitSeconds;
         public List<string> accessoryIds = new List<string>();
 
         public bool HasNextStage => currentStageIndex < totalStageCount;
@@ -72,6 +75,8 @@ namespace Spelunky {
                 currentStageElapsedTime = 0f,
                 progressState = RunProgressState.Active,
                 isFinalEscapeActive = false,
+                finalEscapeTriggeredAtStageTime = 0f,
+                finalEscapeTimeLimitSeconds = DefaultFinalEscapeTimeLimitSeconds,
                 accessoryIds = new List<string>()
             };
         }
@@ -89,6 +94,12 @@ namespace Spelunky {
             builder.AppendLine($"Run Time: {elapsedTime:0.00}s");
             builder.AppendLine($"Stage Time: {currentStageElapsedTime:0.00}s");
             builder.AppendLine($"Final Escape Active: {isFinalEscapeActive}");
+            if (isFinalEscapeActive) {
+                float elapsedSinceTrigger = Math.Max(0f, currentStageElapsedTime - finalEscapeTriggeredAtStageTime);
+                float remaining = Math.Max(0f, finalEscapeTimeLimitSeconds - elapsedSinceTrigger);
+                builder.AppendLine($"Final Escape Triggered At: {finalEscapeTriggeredAtStageTime:0.00}s");
+                builder.AppendLine($"Final Escape Remaining: {remaining:0.00}s");
+            }
             builder.AppendLine($"Accessories: {(accessoryIds.Count > 0 ? string.Join(", ", accessoryIds) : "none")}");
             return builder.ToString();
         }

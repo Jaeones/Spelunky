@@ -23,6 +23,9 @@ namespace Spelunky {
         private void Awake() {
             _audioSource = GetComponent<AudioSource>();
             _spriteAnimator = GetComponentInChildren<SpriteAnimator>();
+            if (_audioSource != null && AudioManager.Instance != null) {
+                AudioManager.Instance.ConfigureSource(_audioSource, AudioManager.AudioGroup.SFX);
+            }
         }
 
         public void Start() {

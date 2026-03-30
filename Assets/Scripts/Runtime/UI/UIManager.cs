@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace Spelunky {
@@ -59,6 +60,11 @@ namespace Spelunky {
         public PlayerHUDReferences PlayerHUD => playerHUD;
         public GameOverUI ResultScreen => resultScreen;
         public UIFlowState CurrentState { get; private set; } = UIFlowState.Gameplay;
+        public bool IsSettingsOpen => settingsUI != null && settingsUI.IsVisible;
+
+        private SettingUI settingsUI;
+        private float settingsPauseRestoreTimeScale = 1f;
+        private bool ownsSettingsPause;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap() {
@@ -95,9 +101,28 @@ namespace Spelunky {
         }
 
         private void OnDestroy() {
+            ResumeGameplayAfterSettings();
+
             if (Instance == this) {
                 Instance = null;
             }
+        }
+
+        private void Update() {
+            if (!Input.GetKeyDown(KeyCode.Escape)) {
+                return;
+            }
+
+            if (IsSettingsOpen) {
+                SetSettingsPanelVisible(false);
+                return;
+            }
+
+            if (CurrentState != UIFlowState.Gameplay) {
+                return;
+            }
+
+            ToggleSettings();
         }
 
         public void ShowHUD(bool visible) {
@@ -239,7 +264,13 @@ namespace Spelunky {
                 resultScreen.HideResult();
             }
 
+            SetSettingsPanelVisible(false);
             EnterGameplayState();
+        }
+
+        public void ToggleSettings() {
+            EnsureSettingsPresentation();
+            SetSettingsPanelVisible(!IsSettingsOpen);
         }
 
         private void ResolveSceneReferences() {
@@ -270,6 +301,7 @@ namespace Spelunky {
         }
 
         private void EnterTransitionState(TransitionViewModel transition) {
+            SetSettingsPanelVisible(false);
             CurrentState = UIFlowState.Transition;
 
             ShowResult(false);
@@ -279,6 +311,7 @@ namespace Spelunky {
         }
 
         private void EnterResultState() {
+            SetSettingsPanelVisible(false);
             CurrentState = UIFlowState.Result;
 
             ShowHUD(false);
@@ -305,6 +338,62 @@ namespace Spelunky {
             if (transitionDetailText != null) {
                 transitionDetailText.text = string.Empty;
             }
+        }
+
+        private void EnsureSettingsPresentation() {
+            if (settingsUI != null) {
+                return;
+            }
+
+            EnsureEventSystem();
+            SettingUI[] existingSettingUIs = FindObjectsOfType<SettingUI>(true);
+            settingsUI = existingSettingUIs.Length > 0 ? existingSettingUIs[0] : null;
+            if (settingsUI == null) {
+                settingsUI = InstantiateSettingsUI();
+            }
+
+            if (settingsUI != null) {
+                settingsUI.SetVisible(false);
+            }
+        }
+
+        private void SetSettingsPanelVisible(bool isVisible) {
+            if (settingsUI == null) {
+                return;
+            }
+
+            bool wasVisible = settingsUI.IsVisible;
+            if (isVisible && !wasVisible && CurrentState == UIFlowState.Gameplay) {
+                PauseGameplayForSettings();
+            }
+            else if (!isVisible && wasVisible) {
+                ResumeGameplayAfterSettings();
+            }
+
+            settingsUI.SetVisible(isVisible);
+
+            if (!isVisible && EventSystem.current != null) {
+                EventSystem.current.SetSelectedGameObject(null);
+            }
+        }
+
+        private void PauseGameplayForSettings() {
+            if (ownsSettingsPause) {
+                return;
+            }
+
+            settingsPauseRestoreTimeScale = Time.timeScale;
+            Time.timeScale = 0f;
+            ownsSettingsPause = true;
+        }
+
+        private void ResumeGameplayAfterSettings() {
+            if (!ownsSettingsPause) {
+                return;
+            }
+
+            Time.timeScale = settingsPauseRestoreTimeScale;
+            ownsSettingsPause = false;
         }
 
         private void EnsureTransitionPresentation() {
@@ -368,6 +457,48 @@ namespace Spelunky {
 
             transitionRoot = root;
             transitionRoot.SetActive(false);
+        }
+
+        private SettingUI InstantiateSettingsUI() {
+            GameObject settingsPrefab = AudioManager.Instance != null ? AudioManager.Instance.SettingsUIPrefab : null;
+            if (settingsPrefab == null) {
+                return null;
+            }
+
+            Transform parent = FindSettingsParent();
+            GameObject instance = parent != null
+                ? Instantiate(settingsPrefab, parent, false)
+                : Instantiate(settingsPrefab);
+
+            instance.name = settingsPrefab.name;
+
+            SettingUI settingComponent = instance.GetComponent<SettingUI>();
+            if (settingComponent == null) {
+                settingComponent = instance.AddComponent<SettingUI>();
+            }
+
+            return settingComponent;
+        }
+
+        private Transform FindSettingsParent() {
+            ResolveSceneReferences();
+
+            if (playerHUD != null) {
+                return playerHUD.transform;
+            }
+
+            Canvas canvas = FindObjectOfType<Canvas>();
+            return canvas != null ? canvas.transform : null;
+        }
+
+        private static void EnsureEventSystem() {
+            if (FindObjectOfType<EventSystem>() != null) {
+                return;
+            }
+
+            GameObject eventSystemObject = new GameObject("EventSystem");
+            eventSystemObject.AddComponent<EventSystem>();
+            eventSystemObject.AddComponent<StandaloneInputModule>();
         }
 
         private static Text CreateTemporaryTransitionText(string name, Transform parent, Font font, int fontSize, FontStyle fontStyle, Vector2 anchoredPosition) {

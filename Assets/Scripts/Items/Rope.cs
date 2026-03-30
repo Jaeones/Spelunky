@@ -38,6 +38,9 @@ namespace Spelunky {
 
         private void Awake() {
             _audioSource = GetComponent<AudioSource>();
+            if (_audioSource != null && AudioManager.Instance != null) {
+                AudioManager.Instance.ConfigureSource(_audioSource, AudioManager.AudioGroup.SFX);
+            }
             _originalLayer = gameObject.layer;
             _airborneTriggerCollider = GetComponent<BoxCollider2D>();
             if (_airborneTriggerCollider == null) {

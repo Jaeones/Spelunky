@@ -1,6 +1,7 @@
 using TwiiK.Utility;
 using UnityEngine;
 using UnityEngine.Audio;
+using UnityEngine.SceneManagement;
 
 public class AudioManager : Singleton<AudioManager> {
 
@@ -14,6 +15,14 @@ public class AudioManager : Singleton<AudioManager> {
     [SerializeField] private AudioClip stage3Music;
     [SerializeField] private AudioClip stage4Music;
 
+    [Header("Cursor")]
+    [SerializeField] private Texture2D cursorTexture;
+    [SerializeField] private Vector2 cursorHotspot = new Vector2(282f, 232f);
+    [SerializeField] private CursorMode cursorMode = CursorMode.Auto;
+
+    [Header("UI")]
+    [SerializeField] private GameObject settingsUIPrefab;
+
     public enum AudioGroup {
 
         SFX,
@@ -25,11 +34,25 @@ public class AudioManager : Singleton<AudioManager> {
     private const float defaultMinDistance = 5f;
     private const float defaultMaxDistance = 50f;
     private const bool looping = false;
+    private const string MasterVolumeKey = "settings.audio.master";
+    private const string BackgroundVolumeKey = "settings.audio.background";
+    private const string SfxVolumeKey = "settings.audio.sfx";
     private AudioSource _musicSource;
+
+    public GameObject SettingsUIPrefab => settingsUIPrefab;
 
     public override void Awake() {
         base.Awake();
         EnsureMusicSource();
+        ApplySavedVolumeSettings();
+        ApplyCursor();
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    private void OnDestroy() {
+        if (Instance == this) {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+        }
     }
 
     /**
@@ -92,7 +115,6 @@ public class AudioManager : Singleton<AudioManager> {
         _musicSource.clip = clip;
         ApplyAudioSourceSettings(_musicSource, AudioGroup.Music, 1f, defaultMinDistance, defaultMaxDistance, true);
         _musicSource.spatialBlend = 0f;
-        _musicSource.volume = 1f;
         _musicSource.Play();
     }
 
@@ -106,6 +128,10 @@ public class AudioManager : Singleton<AudioManager> {
     }
 
     private void ApplyAudioSourceSettings(AudioSource source, AudioGroup group, float pitch = 1f, float minDistance = defaultMinDistance, float maxDistance = defaultMaxDistance, bool loop = looping) {
+        if (source == null) {
+            return;
+        }
+
         source.pitch = pitch;
         source.dopplerLevel = 0;
         source.minDistance = minDistance;
@@ -113,6 +139,7 @@ public class AudioManager : Singleton<AudioManager> {
         source.loop = loop;
         source.playOnAwake = false;
         source.rolloffMode = AudioRolloffMode.Logarithmic;
+        source.volume = GetGroupVolume(group);
 
         switch (group) {
             case AudioGroup.SFX:
@@ -127,6 +154,59 @@ public class AudioManager : Singleton<AudioManager> {
         }
     }
 
+    public void ConfigureSource(AudioSource source, AudioGroup group, float pitch = 1f, bool loop = false) {
+        ApplyAudioSourceSettings(source, group, pitch, defaultMinDistance, defaultMaxDistance, loop);
+    }
+
+    public void ApplySavedVolumeSettings() {
+        AudioListener.volume = GetSavedMasterVolume();
+        EnsureMusicSource();
+
+        if (_musicSource != null) {
+            ApplyAudioSourceSettings(_musicSource, AudioGroup.Music, _musicSource.pitch, _musicSource.minDistance, _musicSource.maxDistance, _musicSource.loop);
+            _musicSource.spatialBlend = 0f;
+        }
+
+        RefreshSceneAudioSources();
+    }
+
+    public static float GetSavedMasterVolume() {
+        return PlayerPrefs.GetFloat(MasterVolumeKey, 1f);
+    }
+
+    public static float GetSavedBackgroundVolume() {
+        return PlayerPrefs.GetFloat(BackgroundVolumeKey, 1f);
+    }
+
+    public static float GetSavedSfxVolume() {
+        return PlayerPrefs.GetFloat(SfxVolumeKey, 1f);
+    }
+
+    public static void SetSavedMasterVolume(float value) {
+        SaveVolume(MasterVolumeKey, value);
+        AudioListener.volume = Mathf.Clamp01(value);
+
+        if (Instance != null) {
+            Instance.ApplySavedVolumeSettings();
+        }
+    }
+
+    public static void SetSavedBackgroundVolume(float value) {
+        SaveVolume(BackgroundVolumeKey, value);
+
+        if (Instance != null) {
+            Instance.ApplySavedVolumeSettings();
+        }
+    }
+
+    public static void SetSavedSfxVolume(float value) {
+        SaveVolume(SfxVolumeKey, value);
+
+        if (Instance != null) {
+            Instance.ApplySavedVolumeSettings();
+        }
+    }
+
     private void EnsureMusicSource() {
         if (_musicSource != null) {
             return;
@@ -136,6 +216,75 @@ public class AudioManager : Singleton<AudioManager> {
         if (_musicSource == null) {
             _musicSource = gameObject.AddComponent<AudioSource>();
         }
+    }
+
+    private float GetGroupVolume(AudioGroup group) {
+        switch (group) {
+            case AudioGroup.Music:
+            case AudioGroup.Ambient:
+                return GetSavedBackgroundVolume();
+            case AudioGroup.SFX:
+            default:
+                return GetSavedSfxVolume();
+        }
+    }
+
+    private void RefreshSceneAudioSources() {
+        AudioSource[] audioSources = FindObjectsOfType<AudioSource>(true);
+        for (int i = 0; i < audioSources.Length; i++) {
+            AudioSource source = audioSources[i];
+            if (source == null || source == _musicSource) {
+                continue;
+            }
+
+            AudioGroup group = ResolveGroup(source);
+            source.volume = GetGroupVolume(group);
+
+            if (group == AudioGroup.SFX && sfxGroup != null) {
+                source.outputAudioMixerGroup = sfxGroup;
+            }
+            else if (group == AudioGroup.Ambient && ambientGroup != null) {
+                source.outputAudioMixerGroup = ambientGroup;
+            }
+            else if (group == AudioGroup.Music && musicGroup != null) {
+                source.outputAudioMixerGroup = musicGroup;
+            }
+        }
+    }
+
+    private AudioGroup ResolveGroup(AudioSource source) {
+        if (source == _musicSource) {
+            return AudioGroup.Music;
+        }
+
+        if (source.outputAudioMixerGroup == ambientGroup) {
+            return AudioGroup.Ambient;
+        }
+
+        if (source.outputAudioMixerGroup == musicGroup) {
+            return AudioGroup.Music;
+        }
+
+        return AudioGroup.SFX;
+    }
+
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode) {
+        ApplySavedVolumeSettings();
+        ApplyCursor();
+    }
+
+    private void ApplyCursor() {
+        if (cursorTexture == null) {
+            return;
+        }
+
+        Cursor.SetCursor(cursorTexture, cursorHotspot, cursorMode);
+        Cursor.visible = true;
+    }
+
+    private static void SaveVolume(string key, float value) {
+        PlayerPrefs.SetFloat(key, Mathf.Clamp01(value));
+        PlayerPrefs.Save();
     }
 
     private AudioClip GetStageMusicClip(int stageIndex) {

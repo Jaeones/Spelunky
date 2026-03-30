@@ -4100,6 +4100,11 @@ MonoBehaviour:
     type: 2}
   musicGroup: {fileID: -960826693257977033, guid: 99a019a9200e56241971455f837c2bb8,
     type: 2}
+  cursorTexture: {fileID: 2800000, guid: d6ae80ed58a667846a7539918a48e668, type: 3}
+  cursorHotspot: {x: 282, y: 232}
+  cursorMode: 0
+  settingsUIPrefab: {fileID: 7893112423469611699, guid: 0801320561ba0dd48988bed06e71fdde,
+    type: 3}
 --- !u!4 &1959517403
 Transform:
   m_ObjectHideFlags: 0

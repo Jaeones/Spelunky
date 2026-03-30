@@ -63,6 +63,9 @@ namespace Spelunky {
             Physics = GetComponent<EntityPhysics>();
             Visuals = GetComponent<EntityVisuals>();
             audioSource = GetComponent<AudioSource>();
+            if (audioSource != null && AudioManager.Instance != null) {
+                AudioManager.Instance.ConfigureSource(audioSource, AudioManager.AudioGroup.SFX);
+            }
             Physics.OnCollisionEnterEvent.AddListener(OnPhysicsCollisionEnter);
             Physics.OnOverlapEnterEvent.AddListener(OnPhysicsOverlapEnter);
         }

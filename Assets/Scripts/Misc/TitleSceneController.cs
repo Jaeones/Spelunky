@@ -27,10 +27,6 @@ namespace Spelunky {
         [SerializeField] private string existingPlayTextObjectName = "Play";
         [SerializeField] private string existingSettingTextObjectName = "Setting";
         [SerializeField] private string existingQuitTextObjectName = "Quit";
-        [SerializeField] private Texture2D cursorTexture;
-        [SerializeField] private Vector2 cursorHotspot = new Vector2(282f, 232f);
-        [SerializeField] private CursorMode cursorMode = CursorMode.Auto;
-
         private Button _playButton;
         private Button _quitButton;
         private Button _settingsButton;
@@ -39,6 +35,7 @@ namespace Spelunky {
         private AudioSource _titleAudioSource;
 
         private void Awake() {
+            HideCursor();
             _titleAudioSource = GetComponent<AudioSource>();
             EnsureCamera();
             EnsureEventSystem();
@@ -49,7 +46,6 @@ namespace Spelunky {
 
             BindSettingsUI();
             ApplyTitleAudioSettings();
-            ApplyCursor();
         }
 
         private void Update() {
@@ -73,6 +69,11 @@ namespace Spelunky {
             if (_settingUI != null) {
                 _settingUI.VolumesChanged -= ApplyTitleAudioSettings;
             }
+        }
+
+        private static void HideCursor() {
+            Cursor.visible = false;
+            Cursor.lockState = CursorLockMode.Locked;
         }
 
         public void StartGame() {
@@ -451,7 +452,12 @@ namespace Spelunky {
             GameObject currentSelection = EventSystem.current.currentSelectedGameObject;
 
             if (currentSelection == null) {
-                EventSystem.current.SetSelectedGameObject(movedDown ? _settingsButton.gameObject : _playButton.gameObject);
+                EventSystem.current.SetSelectedGameObject(_playButton.gameObject);
+                return;
+            }
+
+            if (currentSelection == _playButton.gameObject && movedUp) {
+                EventSystem.current.SetSelectedGameObject(_quitButton.gameObject);
                 return;
             }
 
@@ -570,15 +576,6 @@ namespace Spelunky {
             if (_titleAudioSource != null) {
                 _titleAudioSource.volume = AudioManager.GetSavedBackgroundVolume();
             }
-        }
-
-        private void ApplyCursor() {
-            if (cursorTexture == null) {
-                return;
-            }
-
-            Cursor.SetCursor(cursorTexture, cursorHotspot, cursorMode);
-            Cursor.visible = true;
         }
 
         private static Text CreateText(Transform parent, string name, string content, Font font, int fontSize, FontStyle fontStyle, Vector2 anchor, Vector2 position, Vector2 size, TextAnchor alignment, Color color) {

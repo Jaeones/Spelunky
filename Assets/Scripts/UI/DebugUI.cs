@@ -5,7 +5,7 @@ namespace Spelunky {
     public class DebugUI : MonoBehaviour {
 
         private const float PanelWidth = 360f;
-        private const float PanelHeight = 310f;
+        private const float PanelHeight = 520f;
 
         private Rect _windowRect = new Rect(12f, 12f, PanelWidth, PanelHeight);
         private Vector2 _scrollPosition;
@@ -76,6 +76,48 @@ namespace Spelunky {
             }
 
             GUILayout.Space(8f);
+            GUILayout.Label("Accessories");
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Climbing Glove")) {
+                DebugManager.Instance.AddAccessory(AccessoryType.ClimbingGlove);
+            }
+
+            if (GUILayout.Button("Spring Boots")) {
+                DebugManager.Instance.AddAccessory(AccessoryType.SpringBoots);
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Pitcher's Mitt")) {
+                DebugManager.Instance.AddAccessory(AccessoryType.PitchersMitt);
+            }
+
+            if (GUILayout.Button("Paste")) {
+                DebugManager.Instance.AddAccessory(AccessoryType.Paste);
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(8f);
+            GUILayout.Label("Force Resources");
+            _healthInput = GUILayout.TextField(_healthInput, 4);
+            _bombInput = GUILayout.TextField(_bombInput, 4);
+            _ropeInput = GUILayout.TextField(_ropeInput, 4);
+
+            if (GUILayout.Button("Apply HP / Bomb / Rope")) {
+                if (TryParseInputs(out int health, out int bombs, out int ropes)) {
+                    DebugManager.Instance.ForceSetResources(health, bombs, ropes);
+                }
+            }
+
+            if (GUILayout.Button("Apply Baseline 4 / 4 / 4")) {
+                _healthInput = "4";
+                _bombInput = "4";
+                _ropeInput = "4";
+                DebugManager.Instance.ForceSetResources(4, 4, 4);
+            }
+
+            GUILayout.Space(8f);
             GUILayout.Label("Stage Warp");
             _stageInput = GUILayout.TextField(_stageInput, 4);
             if (GUILayout.Button("Warp To Stage")) {
@@ -104,25 +146,6 @@ namespace Spelunky {
 
             if (GUILayout.Button("Open Ending Scene")) {
                 DebugManager.Instance.OpenEndingScene();
-            }
-
-            GUILayout.Space(8f);
-            GUILayout.Label("Force Resources");
-            _healthInput = GUILayout.TextField(_healthInput, 4);
-            _bombInput = GUILayout.TextField(_bombInput, 4);
-            _ropeInput = GUILayout.TextField(_ropeInput, 4);
-
-            if (GUILayout.Button("Apply HP / Bomb / Rope")) {
-                if (TryParseInputs(out int health, out int bombs, out int ropes)) {
-                    DebugManager.Instance.ForceSetResources(health, bombs, ropes);
-                }
-            }
-
-            if (GUILayout.Button("Apply Baseline 4 / 4 / 4")) {
-                _healthInput = "4";
-                _bombInput = "4";
-                _ropeInput = "4";
-                DebugManager.Instance.ForceSetResources(4, 4, 4);
             }
 
             GUILayout.Space(8f);

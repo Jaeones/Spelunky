@@ -41,6 +41,7 @@ namespace Spelunky {
         private string _bodyFullText;
 
         private void Awake() {
+            HideCursor();
             EnsureCamera();
             BuildUi();
         }
@@ -69,6 +70,11 @@ namespace Spelunky {
             cameraComponent.farClipPlane = 1000f;
             cameraObject.tag = "MainCamera";
             cameraObject.AddComponent<AudioListener>();
+        }
+
+        private static void HideCursor() {
+            Cursor.visible = false;
+            Cursor.lockState = CursorLockMode.Locked;
         }
 
         private void BuildUi() {

@@ -25,6 +25,7 @@ namespace Spelunky {
 
         private const int DefaultSortingOrder = 100;
         private const float DefaultScaleFactor = 2f;
+        private const string PreferredFontResourcePath = "Fonts/Dongle-Regular";
         private static readonly Color DefaultOverlayColor = new Color(0f, 0f, 0f, 0.75f);
         private static readonly Color DefaultButtonColor = new Color(0.15f, 0.15f, 0.15f, 0.95f);
         private static readonly Color DefaultButtonHighlightColor = new Color(0.25f, 0.25f, 0.25f, 0.95f);
@@ -43,14 +44,14 @@ namespace Spelunky {
         [SerializeField] private Color buttonPressedColor = DefaultButtonPressedColor;
 
         [Header("Text")]
-        [SerializeField] private string titleText = "GAME OVER";
-        [SerializeField] private string scoreLabelText = "SCORE";
-        [SerializeField] private string restartLabelText = "RESTART";
+        [SerializeField] private string titleText = "\uC0AC\uB9DD";
+        [SerializeField] private string scoreLabelText = "\uC810\uC218";
+        [SerializeField] private string restartLabelText = "\uB2E4\uC2DC \uC2DC\uC791";
 
         [Header("Run Clear Text")]
-        [SerializeField] private string runClearTitleText = "RUN CLEAR";
-        [SerializeField] private string runClearValueLabelText = "GOLD / TIME";
-        [SerializeField] private string runClearRestartLabelText = "RESTART";
+        [SerializeField] private string runClearTitleText = "\uD074\uB9AC\uC5B4";
+        [SerializeField] private string runClearValueLabelText = "\uD669\uAE08 / \uC2DC\uAC04";
+        [SerializeField] private string runClearRestartLabelText = "\uB2E4\uC2DC \uC2DC\uC791";
 
         private GameObject _panel;
         private Image _contentPanelImage;
@@ -119,10 +120,10 @@ namespace Spelunky {
 
             return new ResultViewModel {
                 Preset = ResultPreset.RunClear,
-                Title = "RUN CLEAR",
-                ValueLabel = "GOLD / TIME",
-                ValueText = $"{gold}\n{elapsedSeconds:0.0}s",
-                PrimaryActionLabel = "RESTART",
+                Title = "\uD074\uB9AC\uC5B4",
+                ValueLabel = "\uD669\uAE08 / \uC2DC\uAC04",
+                ValueText = $"{gold}\n{elapsedSeconds:0.0}\uCD08",
+                PrimaryActionLabel = "\uB2E4\uC2DC \uC2DC\uC791",
                 PrimaryAction = CreateRestartAction(restartSceneName)
             };
         }
@@ -135,10 +136,10 @@ namespace Spelunky {
 
             return new ResultViewModel {
                 Preset = ResultPreset.GameOver,
-                Title = "GAME OVER",
-                ValueLabel = "SCORE",
+                Title = "\uC0AC\uB9DD",
+                ValueLabel = "\uC810\uC218",
                 ValueText = score.ToString(),
-                PrimaryActionLabel = "RESTART",
+                PrimaryActionLabel = "\uB2E4\uC2DC \uC2DC\uC791",
                 PrimaryAction = CreateRestartAction(restartSceneName)
             };
         }
@@ -172,6 +173,16 @@ namespace Spelunky {
         private void OnDestroy() {
             if (Instance == this) {
                 Instance = null;
+            }
+        }
+
+        private void Update() {
+            if (_panel == null || !_panel.activeInHierarchy || _primaryActionButton == null || !_primaryActionButton.gameObject.activeInHierarchy) {
+                return;
+            }
+
+            if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter)) {
+                _primaryActionButton.onClick.Invoke();
             }
         }
 
@@ -221,7 +232,7 @@ namespace Spelunky {
             Image panelImage = _panel.GetComponent<Image>();
             panelImage.color = overlayColor;
 
-            Font fontToUse = defaultFont != null ? defaultFont : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            Font fontToUse = GetPreferredFont();
 
             GameObject contentPanel = new GameObject("ResultCard", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
             contentPanel.transform.SetParent(_panel.transform, false);
@@ -262,6 +273,19 @@ namespace Spelunky {
             buttonRect.anchoredPosition = new Vector2(0f, -64f);
 
             _isBuilt = true;
+        }
+
+        private Font GetPreferredFont() {
+            Font preferredFont = Resources.Load<Font>(PreferredFontResourcePath);
+            if (preferredFont != null) {
+                return preferredFont;
+            }
+
+            if (defaultFont != null) {
+                return defaultFont;
+            }
+
+            return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         }
 
         private Text CreateText(string name, Transform parent, Font font, string text, int fontSize, FontStyle style) {
@@ -422,7 +446,7 @@ namespace Spelunky {
                 Preset = ResultPreset.RunClear,
                 Title = runClearTitleText,
                 ValueLabel = runClearValueLabelText,
-                ValueText = $"{gold}\n{elapsedSeconds:0.0}s",
+                ValueText = $"{gold}\n{elapsedSeconds:0.0}\uCD08",
                 PrimaryActionLabel = runClearRestartLabelText,
                 PrimaryAction = CreateRestartAction(restartSceneName)
             };

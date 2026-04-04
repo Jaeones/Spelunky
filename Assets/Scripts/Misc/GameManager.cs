@@ -11,7 +11,9 @@ namespace Spelunky {
 
         private const int MaxProceduralBuildAttempts = 3;
         private const float TemporaryStageMessageDurationSeconds = 1.25f;
+        private const float StageEntryAttackBlockDurationSeconds = 0.4f;
         private const string FinalEscapeTimeoutCause = "FinalEscapeTimeout";
+        private const string PreferredFontResourcePath = "Fonts/Dongle-Regular";
         private static readonly Color FinalEscapeTimerColor = new Color(1f, 0.9f, 0.35f, 1f);
         private static readonly Color FinalEscapeUrgentTimerColor = new Color(1f, 0.3f, 0.3f, 1f);
 
@@ -34,9 +36,17 @@ namespace Spelunky {
         public bool IsGameOver { get; private set; }
         public bool IsTransitioning { get; private set; }
         public Player ActivePlayer { get; private set; }
+        public bool IsAttackInputTemporarilyBlocked => Time.time < _attackInputBlockedUntilTime;
 
         private Text _finalEscapeTimerText;
+        private GameObject _temporaryStageMessageRoot;
+        private Text _temporaryStageMessageTitleText;
+        private Text _temporaryStageMessageDetailText;
+        private GameObject _temporaryStageMessageCompactRoot;
+        private Text _temporaryStageMessageCompactTitleText;
         private Coroutine _stageMessageCoroutine;
+        private Coroutine _stageClimaxIntroCoroutine;
+        private float _attackInputBlockedUntilTime;
 
         public override void Awake() {
             base.Awake();
@@ -115,6 +125,8 @@ namespace Spelunky {
                 // Spawn a new player at the entrance
                 SpawnPlayer(levelGenerator.entrance.transform.position);
             }
+
+            BeginStageEntryAttackBlock();
         }
 
         private void PrepareLevelForCurrentRun() {
@@ -165,6 +177,7 @@ namespace Spelunky {
 
                 RefreshHudStateForCurrentRun();
                 SpawnPlayer(levelGenerator.entrance.transform.position);
+                BeginStageEntryAttackBlock();
 
                 RunManager.Instance?.RegisterGameScene();
                 RefreshStageMusicForCurrentRun();
@@ -431,15 +444,35 @@ namespace Spelunky {
 
         public bool CanPlayerEnterExit(Player player, Exit exitDoor) {
             RunManager runManager = RunManager.Instance;
-            return runManager == null || runManager.CanUseExit();
+            if (runManager == null) {
+                return true;
+            }
+
+            if (!runManager.CanUseExit()) {
+                return false;
+            }
+
+            if (!runManager.IsCurrentStageFinal || !runManager.IsFinalEscapeActive) {
+                return true;
+            }
+
+            return IsPlayerHoldingGoldIdol(player);
         }
 
         public void HandleLockedExitAttempt(Player player, Exit exitDoor) {
-            if (RunManager.Instance == null || !RunManager.Instance.IsFinalEscapePending) {
+            RunManager runManager = RunManager.Instance;
+            if (runManager == null) {
                 return;
             }
 
-            ShowTemporaryStageMessage("EXIT SEALED", "STEAL THE IDOL");
+            if (runManager.IsFinalEscapePending) {
+                ShowTemporaryStageMessage("\uCD9C\uAD6C \uBD09\uC778", "\uD669\uAE08 \uC6B0\uC0C1\uC744 \uD6D4\uCCD0\uB77C");
+                return;
+            }
+
+            if (runManager.IsCurrentStageFinal && runManager.IsFinalEscapeActive && !IsPlayerHoldingGoldIdol(player)) {
+                ShowTemporaryStageMessage("\uD0C8\uCD9C \uBD88\uAC00", "\uD669\uAE08 \uC6B0\uC0C1\uC744 \uB4E4\uACE0 \uD0C8\uCD9C\uD558\uB77C");
+            }
         }
 
         private void ActivateFinalEscapeFromGoldIdol(Player player) {
@@ -451,7 +484,7 @@ namespace Spelunky {
 
             float timeRemaining = runManager.GetFinalEscapeTimeRemaining();
             Debug.Log($"GameManager: Gold Idol recovered. Escape timer started with {timeRemaining:0.0}s.");
-            ShowTemporaryStageMessage("IDOL RECOVERED", $"ESCAPE IN {Mathf.CeilToInt(timeRemaining)}s");
+            ShowTemporaryStageMessage("\uACE0\uB300 \uC2E0\uC758 \uBD84\uB178", $"\uCC9C\uBC8C\uC774 \uB0B4\uB824\uC628\uB2E4 \u00B7 {Mathf.CeilToInt(timeRemaining)}\uCD08 \uC548\uC5D0 \uD0C8\uCD9C");
             RefreshFinalEscapeHud();
         }
 
@@ -459,14 +492,11 @@ namespace Spelunky {
             RefreshFinalEscapeHud();
 
             RunManager runManager = RunManager.Instance;
-            if (runManager == null || !runManager.IsCurrentStageFinal) {
+            if (runManager == null || runManager.CurrentRun == null) {
                 return;
             }
 
-            if (runManager.IsFinalEscapePending) {
-                ShowTemporaryStageMessage("STAGE 4", "STEAL THE IDOL");
-                return;
-            }
+            ShowStageIntroMessage(runManager);
         }
 
         private void RefreshStageMusicForCurrentRun() {
@@ -512,8 +542,34 @@ namespace Spelunky {
         }
 
         private void ResetStageClimaxRuntime() {
+            if (_stageClimaxIntroCoroutine != null) {
+                StopCoroutine(_stageClimaxIntroCoroutine);
+                _stageClimaxIntroCoroutine = null;
+            }
+
             HideTemporaryStageMessage();
             RefreshFinalEscapeHud();
+        }
+
+        private void ShowStageIntroMessage(RunManager runManager) {
+            if (_stageClimaxIntroCoroutine != null) {
+                StopCoroutine(_stageClimaxIntroCoroutine);
+            }
+
+            string title = $"STAGE {runManager.CurrentRun.currentStageIndex}";
+            string detail = runManager.IsFinalEscapePending ? "\uD669\uAE08 \uC6B0\uC0C1\uC774 \uB108\uB97C \uBD80\uB978\uB2E4..." : string.Empty;
+            _stageClimaxIntroCoroutine = StartCoroutine(ShowStageClimaxIntroMessageRoutine(title, detail));
+        }
+
+        private IEnumerator ShowStageClimaxIntroMessageRoutine(string title, string detail) {
+            yield return null;
+
+            while (IsTransitioning) {
+                yield return null;
+            }
+
+            ShowTemporaryStageMessage(title, detail);
+            _stageClimaxIntroCoroutine = null;
         }
 
         private void RefreshFinalEscapeHud() {
@@ -531,12 +587,12 @@ namespace Spelunky {
             }
 
             float remaining = runManager.GetFinalEscapeTimeRemaining();
-            timerText.text = $"ESCAPE {remaining:0.0}s";
+            timerText.text = $"\uD0C8\uCD9C {remaining:0.0}\uCD08";
             timerText.color = remaining <= 10f ? FinalEscapeUrgentTimerColor : FinalEscapeTimerColor;
         }
-
         private Text EnsureFinalEscapeTimerText() {
             if (_finalEscapeTimerText != null) {
+                _finalEscapeTimerText.font = LoadPreferredFont();
                 return _finalEscapeTimerText;
             }
 
@@ -549,10 +605,13 @@ namespace Spelunky {
             Transform existing = parent.Find("FinalEscapeTimerText");
             if (existing != null) {
                 _finalEscapeTimerText = existing.GetComponent<Text>();
+                if (_finalEscapeTimerText != null) {
+                    _finalEscapeTimerText.font = LoadPreferredFont();
+                }
                 return _finalEscapeTimerText;
             }
 
-            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            Font font = LoadPreferredFont();
             GameObject timerTextObject = new GameObject("FinalEscapeTimerText", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
             timerTextObject.transform.SetParent(parent, false);
 
@@ -585,6 +644,14 @@ namespace Spelunky {
             return holdable.transform.name.IndexOf("GoldIdol", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
+        private static bool IsPlayerHoldingGoldIdol(Player player) {
+            if (player == null || player.Holding == null) {
+                return false;
+            }
+
+            return IsGoldIdol(player.Holding.HeldItem);
+        }
+
         private void ShowTemporaryStageMessage(string title, string detail) {
             if (!isActiveAndEnabled) {
                 return;
@@ -595,9 +662,14 @@ namespace Spelunky {
         }
 
         private IEnumerator ShowTemporaryStageMessageRoutine(string title, string detail) {
-            UIManager uiManager = UIManager.EnsureInstance();
-            uiManager?.ShowTransition(title, detail);
+            if (!TryShowTemporaryStageMessageView(title, detail)) {
+                UIManager uiManager = UIManager.EnsureInstance();
+                uiManager?.ShowTransition(title, detail);
+            }
+
             yield return new WaitForSeconds(TemporaryStageMessageDurationSeconds);
+
+            HideTemporaryStageMessageView();
 
             if (!IsGameOver && UIManager.Instance != null && UIManager.Instance.CurrentState == UIManager.UIFlowState.Transition) {
                 UIManager.Instance.HideTransition();
@@ -612,19 +684,199 @@ namespace Spelunky {
                 _stageMessageCoroutine = null;
             }
 
+            HideTemporaryStageMessageView();
+
             if (!IsGameOver && UIManager.Instance != null && UIManager.Instance.CurrentState == UIManager.UIFlowState.Transition) {
                 UIManager.Instance.HideTransition();
             }
+        }
+
+        private bool TryShowTemporaryStageMessageView(string title, string detail) {
+            bool wantsDetailed = !string.IsNullOrEmpty(detail);
+            bool hasDetailed = EnsureTemporaryStageMessageView();
+            bool hasCompact = EnsureTemporaryStageMessageCompactView();
+
+            if (wantsDetailed && hasDetailed) {
+                _temporaryStageMessageTitleText.text = string.IsNullOrEmpty(title) ? string.Empty : title;
+                _temporaryStageMessageDetailText.text = detail;
+                _temporaryStageMessageDetailText.gameObject.SetActive(true);
+                if (_temporaryStageMessageCompactRoot != null) {
+                    _temporaryStageMessageCompactRoot.SetActive(false);
+                }
+
+                _temporaryStageMessageRoot.SetActive(true);
+                return true;
+            }
+
+            if (!wantsDetailed && hasCompact) {
+                _temporaryStageMessageCompactTitleText.text = string.IsNullOrEmpty(title) ? string.Empty : title;
+                if (_temporaryStageMessageRoot != null) {
+                    _temporaryStageMessageRoot.SetActive(false);
+                }
+
+                _temporaryStageMessageCompactRoot.SetActive(true);
+                return true;
+            }
+
+            if (!hasDetailed) {
+                return false;
+            }
+
+            _temporaryStageMessageTitleText.text = string.IsNullOrEmpty(title) ? string.Empty : title;
+            _temporaryStageMessageDetailText.text = string.IsNullOrEmpty(detail) ? string.Empty : detail;
+            _temporaryStageMessageDetailText.gameObject.SetActive(!string.IsNullOrEmpty(detail));
+            _temporaryStageMessageRoot.SetActive(true);
+            return true;
+        }
+
+        private void HideTemporaryStageMessageView() {
+            if (_temporaryStageMessageRoot != null) {
+                _temporaryStageMessageRoot.SetActive(false);
+            }
+
+            if (_temporaryStageMessageCompactRoot != null) {
+                _temporaryStageMessageCompactRoot.SetActive(false);
+            }
+        }
+
+        private bool EnsureTemporaryStageMessageView() {
+            if (_temporaryStageMessageRoot != null && _temporaryStageMessageTitleText != null && _temporaryStageMessageDetailText != null) {
+                Font preferredFont = LoadPreferredFont();
+                _temporaryStageMessageTitleText.font = preferredFont;
+                _temporaryStageMessageDetailText.font = preferredFont;
+                return true;
+            }
+
+            PlayerHUDReferences hud = ResolvePlayerHud();
+            Transform parent = hud != null && hud.CanvasRoot != null ? hud.CanvasRoot.transform : null;
+            if (parent == null) {
+                return false;
+            }
+
+            Transform existingRoot = parent.Find("TemporaryStageMessage");
+            if (existingRoot != null) {
+                _temporaryStageMessageRoot = existingRoot.gameObject;
+                Transform existingTitle = existingRoot.Find("Title");
+                Transform existingDetail = existingRoot.Find("Detail");
+                _temporaryStageMessageTitleText = existingTitle != null ? existingTitle.GetComponent<Text>() : null;
+                _temporaryStageMessageDetailText = existingDetail != null ? existingDetail.GetComponent<Text>() : null;
+                if (_temporaryStageMessageTitleText != null && _temporaryStageMessageDetailText != null) {
+                    Font preferredFont = LoadPreferredFont();
+                    _temporaryStageMessageTitleText.font = preferredFont;
+                    _temporaryStageMessageDetailText.font = preferredFont;
+                }
+                return _temporaryStageMessageTitleText != null && _temporaryStageMessageDetailText != null;
+            }
+
+            Font font = LoadPreferredFont();
+
+            GameObject root = new GameObject("TemporaryStageMessage", typeof(RectTransform));
+            root.transform.SetParent(parent, false);
+
+            RectTransform rootRect = root.GetComponent<RectTransform>();
+            rootRect.anchorMin = new Vector2(0.5f, 0.5f);
+            rootRect.anchorMax = new Vector2(0.5f, 0.5f);
+            rootRect.pivot = new Vector2(0.5f, 0.5f);
+            rootRect.anchoredPosition = new Vector2(0f, 12f);
+            rootRect.sizeDelta = new Vector2(260f, 64f);
+
+            _temporaryStageMessageTitleText = CreateOverlayText(
+                root.transform,
+                "Title",
+                font,
+                18,
+                FontStyle.Bold,
+                new Vector2(0f, 12f),
+                new Vector2(260f, 28f)
+            );
+            _temporaryStageMessageDetailText = CreateOverlayText(
+                root.transform,
+                "Detail",
+                font,
+                10,
+                FontStyle.Normal,
+                new Vector2(0f, -10f),
+                new Vector2(260f, 20f)
+            );
+
+            _temporaryStageMessageRoot = root;
+            _temporaryStageMessageRoot.SetActive(false);
+            return true;
+        }
+
+        private bool EnsureTemporaryStageMessageCompactView() {
+            if (_temporaryStageMessageCompactRoot != null && _temporaryStageMessageCompactTitleText != null) {
+                _temporaryStageMessageCompactTitleText.font = LoadPreferredFont();
+                return true;
+            }
+
+            PlayerHUDReferences hud = ResolvePlayerHud();
+            Transform parent = hud != null && hud.CanvasRoot != null ? hud.CanvasRoot.transform : null;
+            if (parent == null) {
+                return false;
+            }
+
+            Transform existingRoot = parent.Find("TemporaryStageMessageCompact");
+            if (existingRoot == null) {
+                return false;
+            }
+
+            _temporaryStageMessageCompactRoot = existingRoot.gameObject;
+            Transform existingTitle = existingRoot.Find("Title");
+            _temporaryStageMessageCompactTitleText = existingTitle != null ? existingTitle.GetComponent<Text>() : null;
+            if (_temporaryStageMessageCompactTitleText != null) {
+                _temporaryStageMessageCompactTitleText.font = LoadPreferredFont();
+            }
+            return _temporaryStageMessageCompactTitleText != null;
+        }
+
+        private static Text CreateOverlayText(
+            Transform parent,
+            string name,
+            Font font,
+            int fontSize,
+            FontStyle fontStyle,
+            Vector2 anchoredPosition,
+            Vector2 size
+        ) {
+            GameObject textObject = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+            textObject.transform.SetParent(parent, false);
+
+            RectTransform rect = textObject.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.5f, 0.5f);
+            rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.anchoredPosition = anchoredPosition;
+            rect.sizeDelta = size;
+
+            Text text = textObject.GetComponent<Text>();
+            text.font = font;
+            text.fontSize = fontSize;
+            text.fontStyle = fontStyle;
+            text.alignment = TextAnchor.MiddleCenter;
+            text.color = Color.white;
+            text.raycastTarget = false;
+            text.text = string.Empty;
+            return text;
+        }
+
+        private Font LoadPreferredFont() {
+            Font preferredFont = Resources.Load<Font>(PreferredFontResourcePath);
+            return preferredFont != null ? preferredFont : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        }
+
+        private void BeginStageEntryAttackBlock() {
+            _attackInputBlockedUntilTime = Time.time + StageEntryAttackBlockDurationSeconds;
         }
 
         private GameOverUI.ResultViewModel CreateDeathResultModel(int score) {
             string deathCause = GetDeathCauseDisplayText();
             return new GameOverUI.ResultViewModel {
                 Preset = GameOverUI.ResultPreset.GameOver,
-                Title = "RIP",
-                ValueLabel = "사인",
-                ValueText = $"{deathCause}\n점수 {score}",
-                PrimaryActionLabel = "RESTART",
+                Title = "\uC0AC\uB9DD",
+                ValueLabel = "\uC0AC\uC778",
+                ValueText = $"{deathCause}\n\uC810\uC218 {score}",
+                PrimaryActionLabel = "\uB2E4\uC2DC \uC2DC\uC791",
                 PrimaryAction = RestartCurrentRun
             };
         }
@@ -632,7 +884,7 @@ namespace Spelunky {
         private string GetDeathCauseDisplayText() {
             string deathCause = RunManager.Instance?.LastCompletedResult?.finalDeathCause;
             if (string.IsNullOrWhiteSpace(deathCause)) {
-                return "끝내 원인은 밝혀지지 않았다";
+                return "\uB05D\uB0B4 \uC6D0\uC778\uC740 \uBC1D\uD600\uC9C0\uC9C0 \uC54A\uC558\uB2E4";
             }
 
             if (deathCause.StartsWith("EnemyContact:", StringComparison.Ordinal)) {
@@ -653,31 +905,31 @@ namespace Spelunky {
 
             switch (deathCause) {
                 case "Crush":
-                    return "무너지는 돌더미 아래 깔려 숨을 거두었다";
+                    return "\uBB34\uB108\uC9C0\uB294 \uB3CC\uB354\uBBF8 \uC544\uB798 \uAE54\uB824 \uC228\uC744 \uAC70\uB450\uC5C8\uB2E4";
                 case FinalEscapeTimeoutCause:
-                    return "탈출이 늦어 끝내 심연에 삼켜졌다";
+                    return "\uD0C8\uCD9C\uC774 \uB2A6\uC5B4 \uB05D\uB0B4 \uC2EC\uC5F0\uC5D0 \uC0BC\uCF1C\uC84C\uB2E4";
             }
 
             string normalizedCause = deathCause.Replace('_', ' ').Trim();
-            return $"{normalizedCause} 끝에 생을 마쳤다";
+            return $"{normalizedCause} \uB05D\uC5D0 \uC0DD\uC744 \uB9C8\uCCE4\uB2E4";
         }
 
         private static string GetEnemyContactDeathText(string sourceName) {
             string normalizedName = NormalizeDeathSourceName(sourceName);
             switch (normalizedName) {
                 case "Bat":
-                    return "박쥐의 그림자 같은 습격에 정신을 차릴 틈도 없이 쓰러졌다";
+                    return "\uBC15\uC950\uC758 \uADF8\uB9BC\uC790 \uAC19\uC740 \uC2B5\uACA9\uC5D0 \uC815\uC2E0\uC744 \uCC28\uB9B4 \uD2C8\uB3C4 \uC5C6\uC774 \uC4F0\uB7EC\uC84C\uB2E4";
                 case "Caveman":
-                    return "원시인의 거친 난동에 휘말려 끝내 쓰러졌다";
+                    return "\uC6D0\uC2DC\uC778\uC758 \uAC70\uCE5C \uB09C\uB3D9\uC5D0 \uD718\uB9D0\uB824 \uB05D\uB0B4 \uC4F0\uB7EC\uC84C\uB2E4";
                 case "Snake":
-                    return "뱀의 날카로운 일격에 발목이 잡혀 생을 마쳤다";
+                    return "\uBC40\uC758 \uB0A0\uCE74\uB85C\uC6B4 \uC77C\uACA9\uC5D0 \uBC1C\uBAA9\uC774 \uC7A1\uD600 \uC0DD\uC744 \uB9C8\uCCE4\uB2E4";
                 case "Spider":
-                    return "거미의 집요한 습격을 벗어나지 못하고 숨을 거두었다";
+                    return "\uAC70\uBBF8\uC758 \uC9D1\uC694\uD55C \uC2B5\uACA9\uC744 \uBC97\uC5B4\uB098\uC9C0 \uBABB\uD558\uACE0 \uC228\uC744 \uAC70\uB450\uC5C8\uB2E4";
                 default:
                     string enemyName = GetDeathSourceDisplayName(normalizedName);
                     return string.IsNullOrWhiteSpace(enemyName)
-                        ? "이름 모를 적의 습격에 쓰러졌다"
-                        : $"{enemyName}의 습격 앞에 쓰러졌다";
+                        ? "\uC774\uB984 \uBAA8\uB97C \uC801\uC758 \uC2B5\uACA9\uC5D0 \uC4F0\uB7EC\uC84C\uB2E4"
+                        : $"{enemyName}\uC758 \uC2B5\uACA9 \uC55E\uC5D0 \uC4F0\uB7EC\uC84C\uB2E4";
             }
         }
 
@@ -685,18 +937,18 @@ namespace Spelunky {
             string normalizedName = NormalizeDeathSourceName(sourceName);
             switch (normalizedName) {
                 case "Bat":
-                    return "박쥐가 남긴 상처가 끝내 발목을 붙잡았다";
+                    return "\uBC15\uC950\uAC00 \uB0A8\uAE34 \uC0C1\uCC98\uAC00 \uB05D\uB0B4 \uBC1C\uBAA9\uC744 \uBD99\uC7A1\uC558\uB2E4";
                 case "Caveman":
-                    return "원시인이 휘두른 거친 힘을 버티지 못하고 무너졌다";
+                    return "\uC6D0\uC2DC\uC778\uC774 \uD718\uB450\uB978 \uAC70\uCE5C \uD798\uC744 \uBC84\uD2F0\uC9C0 \uBABB\uD558\uACE0 \uBB34\uB108\uC84C\uB2E4";
                 case "Snake":
-                    return "뱀의 기습적인 공격에 정신을 잃고 말았다";
+                    return "\uBC40\uC758 \uAE30\uC2B5\uC801\uC778 \uACF5\uACA9\uC5D0 \uC815\uC2E0\uC744 \uC783\uACE0 \uB9D0\uC558\uB2E4";
                 case "Spider":
-                    return "거미의 맹독 같은 습격 앞에 끝내 쓰러졌다";
+                    return "\uAC70\uBBF8\uC758 \uB9F9\uB3C5 \uAC19\uC740 \uC2B5\uACA9 \uC55E\uC5D0 \uB05D\uB0B4 \uC4F0\uB7EC\uC84C\uB2E4";
                 default:
                     string enemyName = GetDeathSourceDisplayName(normalizedName);
                     return string.IsNullOrWhiteSpace(enemyName)
-                        ? "이름 모를 적의 공격에 목숨을 잃었다"
-                        : $"{enemyName}의 공격을 버티지 못하고 쓰러졌다";
+                        ? "\uC774\uB984 \uBAA8\uB97C \uC801\uC758 \uACF5\uACA9\uC5D0 \uBAA9\uC228\uC744 \uC783\uC5C8\uB2E4"
+                        : $"{enemyName}\uC758 \uACF5\uACA9\uC744 \uBC84\uD2F0\uC9C0 \uBABB\uD558\uACE0 \uC4F0\uB7EC\uC84C\uB2E4";
             }
         }
 
@@ -705,16 +957,16 @@ namespace Spelunky {
             switch (normalizedName) {
                 case "Spikes":
                 case "Spike":
-                    return "가시 함정에 몸이 꿰뚫려 그대로 생을 마쳤다";
+                    return "\uAC00\uC2DC \uD568\uC815\uC5D0 \uBAB8\uC774 \uAFE4\uB6AB\uB824 \uADF8\uB300\uB85C \uC0DD\uC744 \uB9C8\uCCE4\uB2E4";
                 case "ArrowTrap":
-                    return "화살 함정이 쏜 살을 피하지 못하고 쓰러졌다";
+                    return "\uD654\uC0B4 \uD568\uC815\uC774 \uC3DC \uC0B4\uC744 \uD53C\uD558\uC9C0 \uBABB\uD558\uACE0 \uC4F0\uB7EC\uC84C\uB2E4";
                 case "Arrow":
-                    return "날아든 화살이 깊이 박혀 끝내 숨이 멎었다";
+                    return "\uB0A0\uC544\uB4E0 \uD654\uC0B4\uC774 \uAE4A\uC774 \uBC15\uD600 \uB05D\uB0B4 \uC228\uC774 \uBA4E\uC5C8\uB2E4";
                 default:
                     string displayName = GetDeathSourceDisplayName(normalizedName);
                     return string.IsNullOrWhiteSpace(displayName)
-                        ? "정체불명의 함정에 목숨을 잃었다"
-                        : $"{displayName}에 휩쓸려 생을 마쳤다";
+                        ? "\uC815\uCCB4\uBD88\uBA85\uC758 \uD568\uC815\uC5D0 \uBAA9\uC228\uC744 \uC783\uC5C8\uB2E4"
+                        : $"{displayName}\uC5D0 \uD719\uC4F8\uB824 \uC0DD\uC744 \uB9C8\uCCE4\uB2E4";
             }
         }
 
@@ -722,14 +974,14 @@ namespace Spelunky {
             string normalizedName = NormalizeDeathSourceName(sourceName);
             switch (normalizedName) {
                 case "Bomb":
-                    return "폭탄의 불길한 섬광과 함께 흔적도 없이 날아갔다";
+                    return "\uD3ED\uD0C4\uC758 \uBD88\uAE38\uD55C \uC12C\uAD11\uACFC \uD568\uAED8 \uD754\uC801\uB3C4 \uC5C6\uC774 \uB0A0\uC544\uAC14\uB2E4";
                 case "ArrowTrap":
-                    return "화살 함정 주변의 폭발에 휘말려 쓰러졌다";
+                    return "\uD654\uC0B4 \uD568\uC815 \uC8FC\uBCC0\uC758 \uD3ED\uBC1C\uC5D0 \uD719\uB9D0\uB824 \uC4F0\uB7EC\uC84C\uB2E4";
                 default:
                     string displayName = GetDeathSourceDisplayName(normalizedName);
                     return string.IsNullOrWhiteSpace(displayName)
-                        ? "거센 폭발에 휘말려 쓰러졌다"
-                        : $"{displayName} 폭발에 휘말려 쓰러졌다";
+                        ? "\uAC70\uC13C \uD3ED\uBC1C\uC5D0 \uD719\uB9D0\uB824 \uC4F0\uB7EC\uC84C\uB2E4"
+                        : $"{displayName} \uD3ED\uBC1C\uC5D0 \uD719\uB9D0\uB824 \uC4F0\uB7EC\uC84C\uB2E4";
             }
         }
 
@@ -738,24 +990,24 @@ namespace Spelunky {
 
             switch (normalizedName) {
                 case "Bat":
-                    return "박쥐";
+                    return "\uBC15\uC950";
                 case "Caveman":
-                    return "원시인";
+                    return "\uC6D0\uC2DC\uC778";
                 case "Snake":
-                    return "뱀";
+                    return "\uBC40";
                 case "Spider":
-                    return "거미";
+                    return "\uAC70\uBBF8";
                 case "Spikes":
                 case "Spike":
-                    return "가시";
+                    return "\uAC00\uC2DC";
                 case "ArrowTrap":
-                    return "화살 함정";
+                    return "\uD654\uC0B4 \uD568\uC815";
                 case "Arrow":
-                    return "화살";
+                    return "\uD654\uC0B4";
                 case "Bomb":
-                    return "폭탄";
+                    return "\uD3ED\uD0C4";
                 case "GoldIdol":
-                    return "황금 우상";
+                    return "\uD669\uAE08 \uC6B0\uC0C1";
                 default:
                     return normalizedName;
             }
@@ -773,7 +1025,6 @@ namespace Spelunky {
 
             return normalizedName;
         }
-
         private void RestartCurrentRun() {
             if (RunManager.Instance != null) {
                 RunManager.Instance.RestartRun(gameObject.scene.name);

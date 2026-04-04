@@ -505,6 +505,7 @@ MonoBehaviour:
   accessoryIconPrefab: {fileID: 4353989848302145078, guid: e3534961be6294341a739af9b9ca58d7,
     type: 3}
   accessoriesContainer: {fileID: 0}
+  accessoryIconDisplaySize: {x: 48, y: 48}
   timeBeforeAddingCurrentGoldToTotal: 2
   goldToAddPerInterval: 100
   goldIntervalTime: 0.01

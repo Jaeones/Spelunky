@@ -15,11 +15,6 @@ public class AudioManager : Singleton<AudioManager> {
     [SerializeField] private AudioClip stage3Music;
     [SerializeField] private AudioClip stage4Music;
 
-    [Header("Cursor")]
-    [SerializeField] private Texture2D cursorTexture;
-    [SerializeField] private Vector2 cursorHotspot = new Vector2(282f, 232f);
-    [SerializeField] private CursorMode cursorMode = CursorMode.Auto;
-
     [Header("UI")]
     [SerializeField] private GameObject settingsUIPrefab;
 
@@ -45,7 +40,6 @@ public class AudioManager : Singleton<AudioManager> {
         base.Awake();
         EnsureMusicSource();
         ApplySavedVolumeSettings();
-        ApplyCursor();
         SceneManager.sceneLoaded += OnSceneLoaded;
     }
 
@@ -270,16 +264,6 @@ public class AudioManager : Singleton<AudioManager> {
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode) {
         ApplySavedVolumeSettings();
-        ApplyCursor();
-    }
-
-    private void ApplyCursor() {
-        if (cursorTexture == null) {
-            return;
-        }
-
-        Cursor.SetCursor(cursorTexture, cursorHotspot, cursorMode);
-        Cursor.visible = true;
     }
 
     private static void SaveVolume(string key, float value) {

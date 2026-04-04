@@ -2,6 +2,9 @@ using UnityEngine;
 using UnityEngine.UI;
 using System.Collections.Generic;
 using System.Collections;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace Spelunky {
 
@@ -14,6 +17,7 @@ namespace Spelunky {
         [Header("Accessories")]
         public GameObject accessoryIconPrefab;
         public Transform accessoriesContainer;
+        [SerializeField] private Vector2 accessoryIconDisplaySize = new Vector2(48f, 48f);
 
         private static readonly Dictionary<AccessoryType, Sprite> AccessoryIconCache = new Dictionary<AccessoryType, Sprite>();
 
@@ -315,7 +319,78 @@ namespace Spelunky {
                 return icon;
             }
 
-            return AccessoryIconCache.TryGetValue(type, out Sprite cachedIcon) ? cachedIcon : null;
+            if (AccessoryIconCache.TryGetValue(type, out Sprite cachedIcon) && cachedIcon != null) {
+                return cachedIcon;
+            }
+
+            Sprite resolvedIcon = FindAccessoryIconInScene(type);
+            if (resolvedIcon == null) {
+                resolvedIcon = LoadAccessoryIconFromPrefab(type);
+            }
+
+            if (resolvedIcon != null) {
+                AccessoryIconCache[type] = resolvedIcon;
+            }
+
+            return resolvedIcon;
+        }
+
+        private static Sprite FindAccessoryIconInScene(AccessoryType type) {
+            AccessoryPickup[] pickups = FindObjectsOfType<AccessoryPickup>(true);
+            for (int i = 0; i < pickups.Length; i++) {
+                AccessoryPickup pickup = pickups[i];
+                if (pickup == null || pickup.accessoryType != type) {
+                    continue;
+                }
+
+                if (pickup.icon != null) {
+                    return pickup.icon;
+                }
+
+                SpriteRenderer renderer = pickup.GetComponent<SpriteRenderer>();
+                if (renderer != null && renderer.sprite != null) {
+                    return renderer.sprite;
+                }
+            }
+
+            return null;
+        }
+
+        private static Sprite LoadAccessoryIconFromPrefab(AccessoryType type) {
+#if UNITY_EDITOR
+            string prefabPath;
+            switch (type) {
+                case AccessoryType.ClimbingGlove:
+                    prefabPath = "Assets/Prefabs/Items/Accessories/ClimbingGlove.prefab";
+                    break;
+                case AccessoryType.SpringBoots:
+                    prefabPath = "Assets/Prefabs/Items/Accessories/SpringBoots.prefab";
+                    break;
+                case AccessoryType.PitchersMitt:
+                    prefabPath = "Assets/Prefabs/Items/Accessories/PitchersMitt.prefab";
+                    break;
+                case AccessoryType.Paste:
+                    prefabPath = "Assets/Prefabs/Items/Accessories/Paste.prefab";
+                    break;
+                default:
+                    return null;
+            }
+
+            GameObject accessoryPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            if (accessoryPrefab == null) {
+                return null;
+            }
+
+            AccessoryPickup pickup = accessoryPrefab.GetComponent<AccessoryPickup>();
+            if (pickup != null && pickup.icon != null) {
+                return pickup.icon;
+            }
+
+            SpriteRenderer renderer = accessoryPrefab.GetComponent<SpriteRenderer>();
+            return renderer != null ? renderer.sprite : null;
+#else
+            return null;
+#endif
         }
 
         private void AddAccessoryIcon(Sprite icon) {
@@ -324,9 +399,21 @@ namespace Spelunky {
             }
 
             GameObject iconInstance = Instantiate(accessoryIconPrefab, accessoriesContainer);
+            RectTransform iconRect = iconInstance.transform as RectTransform;
+            if (iconRect != null) {
+                iconRect.localScale = Vector3.one;
+                iconRect.sizeDelta = accessoryIconDisplaySize;
+            }
+
             Image image = iconInstance.GetComponent<Image>();
             if (image != null) {
                 image.sprite = icon;
+                image.preserveAspect = true;
+            }
+
+            RectTransform containerRect = accessoriesContainer as RectTransform;
+            if (containerRect != null && containerRect.sizeDelta.y < accessoryIconDisplaySize.y) {
+                containerRect.sizeDelta = new Vector2(containerRect.sizeDelta.x, accessoryIconDisplaySize.y);
             }
         }
 

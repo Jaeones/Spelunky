@@ -101,7 +101,7 @@ namespace Spelunky {
 
             RunStageLoadRequest nextStageRequest = CreateNextStageLoadRequest(currentSceneName);
             if (nextStageRequest == null) {
-                CompleteRunClear(currentSceneName);
+                CompleteRunClear();
                 return;
             }
 
@@ -438,10 +438,10 @@ namespace Spelunky {
             };
         }
 
-        private void CompleteRunClear(string sceneName) {
+        private void CompleteRunClear() {
             CurrentRun.progressState = RunProgressState.Clear;
             FinalizeCurrentRun("clear", string.Empty);
-            ShowRunClearResult(sceneName);
+            OpenEndingScene();
         }
 
         private void StartStageTracking(string sceneName) {
@@ -531,16 +531,6 @@ namespace Spelunky {
             }
 
             _preservedHeldItem = null;
-        }
-
-        private void ShowRunClearResult(string sceneName) {
-            GameOverUI.ShowResult(new GameOverUI.ResultViewModel {
-                Title = "RUN CLEAR",
-                ValueLabel = "GOLD / TIME",
-                ValueText = $"{CurrentRun.gold}\n{CurrentRun.elapsedTime:0.0}s",
-                PrimaryActionLabel = "ENDING",
-                PrimaryAction = OpenEndingScene
-            });
         }
 
         private void OpenEndingScene() {

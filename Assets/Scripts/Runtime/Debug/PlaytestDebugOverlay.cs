@@ -30,7 +30,7 @@ namespace Spelunky {
             new PlaytestPreset("Stage 4 Clutch", 4, 2, 1, 1, "Check final-stage resource squeeze")
         };
 
-        private Rect _windowRect = new Rect(12f, 12f, 420f, 520f);
+        private Rect _windowRect = new Rect(12f, 12f, 420f, 600f);
         private Vector2 _scrollPosition;
         private string _stageInput = "1";
         private string _healthInput = "4";
@@ -99,6 +99,7 @@ namespace Spelunky {
             GUILayout.BeginVertical();
 
             DrawSummary();
+            DrawAccessoryControls();
             DrawWarpControls();
             DrawResourceControls();
             DrawPresetControls();
@@ -162,6 +163,31 @@ namespace Spelunky {
             if (GUILayout.Button("Open Ending Scene")) {
                 DebugManager.Instance.OpenEndingScene();
             }
+        }
+
+        private void DrawAccessoryControls() {
+            GUILayout.Space(8f);
+            GUILayout.Label("Accessories");
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Climbing Glove")) {
+                DebugManager.Instance.AddAccessory(AccessoryType.ClimbingGlove);
+            }
+
+            if (GUILayout.Button("Spring Boots")) {
+                DebugManager.Instance.AddAccessory(AccessoryType.SpringBoots);
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Pitcher's Mitt")) {
+                DebugManager.Instance.AddAccessory(AccessoryType.PitchersMitt);
+            }
+
+            if (GUILayout.Button("Paste")) {
+                DebugManager.Instance.AddAccessory(AccessoryType.Paste);
+            }
+            GUILayout.EndHorizontal();
         }
 
         private void DrawResourceControls() {

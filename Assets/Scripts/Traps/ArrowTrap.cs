@@ -31,10 +31,22 @@ namespace Spelunky {
 
         public void Tick() {
             int activeOcclusionMask = occlusionMask.value != 0 ? occlusionMask.value : GetDefaultOcclusionMask();
-            int combinedMask = detectMask.value | activeOcclusionMask;
-            RaycastHit2D hit = Physics2D.Raycast(RayOrigin, RayDirection, rayDistance, combinedMask);
-            if (hit.collider != null && ShouldTriggerFromHit(hit.collider)) {
-                Fire();
+            int combinedMask = detectMask.value | activeOcclusionMask | GetRopeSupportMask();
+            RaycastHit2D[] hits = Physics2D.RaycastAll(RayOrigin, RayDirection, rayDistance, combinedMask);
+            for (int i = 0; i < hits.Length; i++) {
+                Collider2D hitCollider = hits[i].collider;
+                if (hitCollider == null) {
+                    continue;
+                }
+
+                if (IsLayerInMask(hitCollider.gameObject.layer, activeOcclusionMask)) {
+                    return;
+                }
+
+                if (IsRopeHit(hitCollider) || IsLayerInMask(hitCollider.gameObject.layer, detectMask)) {
+                    Fire();
+                    return;
+                }
             }
         }
 
@@ -42,17 +54,14 @@ namespace Spelunky {
             return LayerMask.GetMask("Obstacle", "Block", "Indestructable");
         }
 
-        private bool ShouldTriggerFromHit(Collider2D hitCollider) {
-            if (hitCollider == null || !IsLayerInMask(hitCollider.gameObject.layer, detectMask)) {
-                return false;
-            }
-
+        private static int GetRopeSupportMask() {
             int ladderLayer = LayerMask.NameToLayer("Ladder");
-            if (ladderLayer >= 0 && hitCollider.gameObject.layer == ladderLayer) {
-                return hitCollider.CompareTag("Rope") || hitCollider.GetComponentInParent<Rope>() != null;
-            }
+            return ladderLayer >= 0 ? 1 << ladderLayer : 0;
+        }
 
-            return true;
+        private static bool IsRopeHit(Collider2D hitCollider) {
+            return hitCollider != null &&
+                (hitCollider.CompareTag("Rope") || hitCollider.GetComponentInParent<Rope>() != null);
         }
 
         private static bool IsLayerInMask(int layer, LayerMask mask) {

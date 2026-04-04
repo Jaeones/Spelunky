@@ -2,6 +2,9 @@ using System;
 using System.IO;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace Spelunky {
 
@@ -90,6 +93,33 @@ namespace Spelunky {
             }
 
             RunManager.Instance.ForceSetResources(health, bombs, ropes);
+            DumpRunState();
+        }
+
+        public void AddAccessory(AccessoryType accessoryType) {
+            if (!RuntimeToolsEnabled) {
+                return;
+            }
+
+            Player player = ResolveActivePlayer();
+            if (player == null || player.Accessories == null) {
+                LastRunStateDump = "Active player unavailable.";
+                return;
+            }
+
+            if (player.Accessories.HasAccessory(accessoryType)) {
+                LastRunStateDump = $"{accessoryType} already owned.";
+                Debug.Log($"DebugManager: Skipped duplicate accessory {accessoryType}.");
+                return;
+            }
+
+            Sprite icon = ResolveAccessoryIcon(accessoryType);
+            player.Accessories.AddAccessory(accessoryType, icon);
+
+            if (RunManager.Instance != null) {
+                RunManager.Instance.CapturePlayerState(player);
+            }
+
             DumpRunState();
         }
 
@@ -209,6 +239,78 @@ namespace Spelunky {
         private static string GetDefaultTesterTag() {
             return string.IsNullOrWhiteSpace(Environment.UserName) ? "unknown" : Environment.UserName;
         }
+
+        private Player ResolveActivePlayer() {
+            if (RunManager.Instance != null && RunManager.Instance.ActivePlayer != null) {
+                return RunManager.Instance.ActivePlayer;
+            }
+
+            if (GameManager.Instance != null && GameManager.Instance.ActivePlayer != null) {
+                return GameManager.Instance.ActivePlayer;
+            }
+
+            return FindObjectOfType<Player>();
+        }
+
+        private Sprite ResolveAccessoryIcon(AccessoryType accessoryType) {
+            AccessoryPickup[] pickups = FindObjectsOfType<AccessoryPickup>();
+            for (int i = 0; i < pickups.Length; i++) {
+                AccessoryPickup pickup = pickups[i];
+                if (pickup == null || pickup.accessoryType != accessoryType) {
+                    continue;
+                }
+
+                if (pickup.icon != null) {
+                    return pickup.icon;
+                }
+
+                SpriteRenderer renderer = pickup.GetComponent<SpriteRenderer>();
+                if (renderer != null && renderer.sprite != null) {
+                    return renderer.sprite;
+                }
+            }
+
+#if UNITY_EDITOR
+            GameObject accessoryPrefab = LoadAccessoryPrefab(accessoryType);
+            if (accessoryPrefab != null) {
+                AccessoryPickup pickup = accessoryPrefab.GetComponent<AccessoryPickup>();
+                if (pickup != null && pickup.icon != null) {
+                    return pickup.icon;
+                }
+
+                SpriteRenderer renderer = accessoryPrefab.GetComponent<SpriteRenderer>();
+                if (renderer != null && renderer.sprite != null) {
+                    return renderer.sprite;
+                }
+            }
+#endif
+
+            return null;
+        }
+
+#if UNITY_EDITOR
+        private static GameObject LoadAccessoryPrefab(AccessoryType accessoryType) {
+            string prefabPath;
+            switch (accessoryType) {
+                case AccessoryType.ClimbingGlove:
+                    prefabPath = "Assets/Prefabs/Items/Accessories/ClimbingGlove.prefab";
+                    break;
+                case AccessoryType.SpringBoots:
+                    prefabPath = "Assets/Prefabs/Items/Accessories/SpringBoots.prefab";
+                    break;
+                case AccessoryType.PitchersMitt:
+                    prefabPath = "Assets/Prefabs/Items/Accessories/PitchersMitt.prefab";
+                    break;
+                case AccessoryType.Paste:
+                    prefabPath = "Assets/Prefabs/Items/Accessories/Paste.prefab";
+                    break;
+                default:
+                    return null;
+            }
+
+            return AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+        }
+#endif
     }
 
     public static class DebugDamageContext {

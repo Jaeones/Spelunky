@@ -11,6 +11,7 @@ namespace Spelunky {
     public class UIManager : MonoBehaviour {
 
         private const int TemporaryTransitionSortingOrder = 90;
+        private const string PreferredFontResourcePath = "Fonts/Dongle-Regular";
         private static readonly Color TemporaryTransitionOverlayColor = new Color(0f, 0f, 0f, 0.65f);
 
         public enum UIFlowState {
@@ -57,12 +58,19 @@ namespace Spelunky {
         [SerializeField] private string defaultStageTransitionTitle = "STAGE";
         [SerializeField] private string stageTransitionTitleFormat = "STAGE {0}";
 
+        [Header("Gameplay Hint")]
+        [SerializeField] private bool showStageOneControlsHint = true;
+        [SerializeField] private string stageOneControlsHintTitle = "조작키";
+        [SerializeField] [TextArea(4, 10)] private string stageOneControlsHintText =
+            "이동   WASD\n점프   SPACE\n채찍   ←\n폭탄   →\n로프   ↑\n아이템 줍기   ↓ + ←\n상호작용   E\n달리기   SHIFT";
+
         public PlayerHUDReferences PlayerHUD => playerHUD;
         public GameOverUI ResultScreen => resultScreen;
         public UIFlowState CurrentState { get; private set; } = UIFlowState.Gameplay;
         public bool IsSettingsOpen => settingsUI != null && settingsUI.IsVisible;
 
         private SettingUI settingsUI;
+        private GameObject gameplayHintRoot;
         private float settingsPauseRestoreTimeScale = 1f;
         private bool ownsSettingsPause;
 
@@ -100,6 +108,12 @@ namespace Spelunky {
             ResolveSceneReferences();
         }
 
+        private void Start() {
+            ResolveSceneReferences();
+            SetCursorVisible(CurrentState != UIFlowState.Gameplay);
+            RefreshGameplayHintVisibility();
+        }
+
         private void OnDestroy() {
             ResumeGameplayAfterSettings();
 
@@ -109,6 +123,8 @@ namespace Spelunky {
         }
 
         private void Update() {
+            SetCursorVisible(false);
+
             if (!Input.GetKeyDown(KeyCode.Escape)) {
                 return;
             }
@@ -123,6 +139,7 @@ namespace Spelunky {
             }
 
             ToggleSettings();
+            RefreshGameplayHintVisibility();
         }
 
         public void ShowHUD(bool visible) {
@@ -131,6 +148,8 @@ namespace Spelunky {
             if (hudRoot != null) {
                 hudRoot.SetActive(visible);
             }
+
+            RefreshGameplayHintVisibility();
         }
 
         public void ShowTransition(bool visible) {
@@ -298,6 +317,8 @@ namespace Spelunky {
             ShowTransition(false);
             ClearTransition();
             ShowHUD(true);
+            SetCursorVisible(false);
+            RefreshGameplayHintVisibility();
         }
 
         private void EnterTransitionState(TransitionViewModel transition) {
@@ -308,6 +329,8 @@ namespace Spelunky {
             ShowHUD(false);
             ApplyTransition(transition);
             ShowTransition(true);
+            SetCursorVisible(false);
+            RefreshGameplayHintVisibility();
         }
 
         private void EnterResultState() {
@@ -318,9 +341,13 @@ namespace Spelunky {
             ShowTransition(false);
             ClearTransition();
             ShowResult(true);
+            SetCursorVisible(true);
+            RefreshGameplayHintVisibility();
         }
 
         private void ApplyTransition(TransitionViewModel transition) {
+            ApplyPreferredTransitionFont();
+
             if (transitionTitleText != null) {
                 transitionTitleText.text = string.IsNullOrEmpty(transition.Title) ? string.Empty : transition.Title;
             }
@@ -358,6 +385,8 @@ namespace Spelunky {
         }
 
         private void SetSettingsPanelVisible(bool isVisible) {
+            SetCursorVisible(isVisible);
+
             if (settingsUI == null) {
                 return;
             }
@@ -396,12 +425,100 @@ namespace Spelunky {
             ownsSettingsPause = false;
         }
 
+        private static void SetCursorVisible(bool isVisible) {
+            // This project uses keyboard-first navigation, so the cursor stays hidden in all runtime UI states.
+            Cursor.visible = false;
+            Cursor.lockState = CursorLockMode.Locked;
+        }
+
         private void EnsureTransitionPresentation() {
             if (transitionRoot != null) {
+                ApplyPreferredTransitionFont();
                 return;
             }
 
             CreateTemporaryTransitionUI();
+        }
+
+        private void RefreshGameplayHintVisibility() {
+            if (gameplayHintRoot == null && ShouldShowStageOneControlsHint()) {
+                EnsureGameplayHintPresentation();
+            }
+
+            if (gameplayHintRoot == null) {
+                return;
+            }
+
+            gameplayHintRoot.SetActive(ShouldShowStageOneControlsHint());
+        }
+
+        private bool ShouldShowStageOneControlsHint() {
+            if (!showStageOneControlsHint || CurrentState != UIFlowState.Gameplay) {
+                return false;
+            }
+
+            ResolveSceneReferences();
+            if (hudRoot == null || !hudRoot.activeInHierarchy) {
+                return false;
+            }
+
+            return RunManager.Instance != null &&
+                   RunManager.Instance.CurrentRun != null &&
+                   RunManager.Instance.CurrentRun.currentStageIndex == 1;
+        }
+
+        private void EnsureGameplayHintPresentation() {
+            if (gameplayHintRoot != null) {
+                return;
+            }
+
+            Transform parent = hudRoot != null ? hudRoot.transform : FindSettingsParent();
+            if (parent == null) {
+                return;
+            }
+
+            Font font = LoadPreferredFont();
+
+            GameObject root = new GameObject("StageOneControlsHint", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            root.transform.SetParent(parent, false);
+
+            RectTransform rootRect = root.GetComponent<RectTransform>();
+            rootRect.anchorMin = new Vector2(0f, 0.5f);
+            rootRect.anchorMax = new Vector2(0f, 0.5f);
+            rootRect.pivot = new Vector2(0f, 0.5f);
+            rootRect.anchoredPosition = new Vector2(18f, 0f);
+            rootRect.sizeDelta = new Vector2(170f, 180f);
+
+            Image rootImage = root.GetComponent<Image>();
+            rootImage.color = new Color(0.08f, 0.06f, 0.04f, 0.68f);
+            rootImage.raycastTarget = false;
+
+            CreateGameplayHintText(
+                "Title",
+                root.transform,
+                font,
+                stageOneControlsHintTitle,
+                15,
+                FontStyle.Bold,
+                new Vector2(10f, -12f),
+                new Vector2(150f, 24f),
+                new Color(1f, 0.92f, 0.74f, 1f)
+            );
+
+            CreateGameplayHintText(
+                "Body",
+                root.transform,
+                font,
+                stageOneControlsHintText,
+                11,
+                FontStyle.Normal,
+                new Vector2(10f, -40f),
+                new Vector2(150f, 124f),
+                Color.white
+            );
+
+            gameplayHintRoot = root;
+            gameplayHintRoot.SetActive(false);
         }
 
         private TransitionViewModel CreateConfiguredStageTransitionModel(int stageIndex, string stageName) {
@@ -450,7 +567,7 @@ namespace Spelunky {
             Image panelImage = panel.GetComponent<Image>();
             panelImage.color = TemporaryTransitionOverlayColor;
 
-            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            Font font = LoadPreferredFont();
 
             transitionTitleText = CreateTemporaryTransitionText("Title", panel.transform, font, 18, FontStyle.Bold, new Vector2(0f, 16f));
             transitionDetailText = CreateTemporaryTransitionText("Detail", panel.transform, font, 10, FontStyle.Normal, new Vector2(0f, -10f));
@@ -478,6 +595,22 @@ namespace Spelunky {
             }
 
             return settingComponent;
+        }
+
+        private void ApplyPreferredTransitionFont() {
+            Font font = LoadPreferredFont();
+            if (transitionTitleText != null) {
+                transitionTitleText.font = font;
+            }
+
+            if (transitionDetailText != null) {
+                transitionDetailText.font = font;
+            }
+        }
+
+        private Font LoadPreferredFont() {
+            Font preferredFont = Resources.Load<Font>(PreferredFontResourcePath);
+            return preferredFont != null ? preferredFont : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         }
 
         private Transform FindSettingsParent() {
@@ -519,6 +652,31 @@ namespace Spelunky {
             text.color = Color.white;
             text.raycastTarget = false;
             text.text = string.Empty;
+
+            return text;
+        }
+
+        private static Text CreateGameplayHintText(string name, Transform parent, Font font, string content, int fontSize, FontStyle fontStyle, Vector2 anchoredPosition, Vector2 sizeDelta, Color color) {
+            GameObject go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+            go.transform.SetParent(parent, false);
+
+            RectTransform rect = go.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 1f);
+            rect.anchoredPosition = anchoredPosition;
+            rect.sizeDelta = sizeDelta;
+
+            Text text = go.GetComponent<Text>();
+            text.font = font;
+            text.fontSize = fontSize;
+            text.fontStyle = fontStyle;
+            text.alignment = TextAnchor.UpperLeft;
+            text.color = color;
+            text.raycastTarget = false;
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.text = content;
 
             return text;
         }

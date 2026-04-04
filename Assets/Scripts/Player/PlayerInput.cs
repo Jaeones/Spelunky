@@ -46,6 +46,12 @@ namespace Spelunky {
                 return;
             }
 
+            if (UIManager.Instance != null && UIManager.Instance.IsSettingsOpen) {
+                currentState.OnDirectionalInput(Vector2.zero);
+                _player.sprinting = false;
+                return;
+            }
+
             Vector2 directionalInput = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
             directionalInput.x = Mathf.Abs(directionalInput.x) < joystickDeadzone ? 0 : directionalInput.x;
             directionalInput.y = Mathf.Abs(directionalInput.y) < joystickDeadzone ? 0 : directionalInput.y;
@@ -73,7 +79,9 @@ namespace Spelunky {
                 currentState.OnUseInputDown();
             }
 
-            if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.Joystick1Button2)) {
+            bool attackPressed = Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.Joystick1Button2);
+            bool blockAttackInput = GameManager.Instance != null && GameManager.Instance.IsAttackInputTemporarilyBlocked;
+            if (attackPressed && !blockAttackInput) {
                 currentState.OnAttackInputDown();
             }
         }

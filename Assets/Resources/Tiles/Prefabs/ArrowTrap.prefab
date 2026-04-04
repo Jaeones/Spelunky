@@ -177,7 +177,7 @@ MonoBehaviour:
   rayDistance: 160
   detectMask:
     serializedVersion: 2
-    m_Bits: 68096
+    m_Bits: 66048
   occlusionMask:
     serializedVersion: 2
     m_Bits: 0

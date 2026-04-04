@@ -137,7 +137,7 @@ namespace Spelunky {
         }
 
         private void Start() {
-            stateMachine.AttemptToChangeState(groundedState);
+            EnsureInitialState();
         }
 
         protected virtual void OnEnable() {
@@ -152,6 +152,11 @@ namespace Spelunky {
         public bool IsTickActive => true;
 
         public void Tick() {
+            EnsureInitialState();
+            if (CurrentPlayerState == null) {
+                return;
+            }
+
             if (_isAttacking) {
                 UpdateAttack();
             }
@@ -178,6 +183,11 @@ namespace Spelunky {
 
         // ILateTickable implementation
         public void LateTick() {
+            EnsureInitialState();
+            if (CurrentPlayerState == null) {
+                return;
+            }
+
             HandleEnemyOverlaps();
 
             CurrentPlayerState.ChangePlayerVelocityAfterMove(ref requestedVelocity);
@@ -513,6 +523,14 @@ namespace Spelunky {
                 layerMask = enemyOverlapMask,
                 useTriggers = false
             };
+        }
+
+        private void EnsureInitialState() {
+            if (stateMachine.CurrentState != null || groundedState == null || Physics == null || Audio == null || Visuals == null) {
+                return;
+            }
+
+            stateMachine.AttemptToChangeState(groundedState);
         }
 
         private void OnValidate() {
